@@ -5,7 +5,7 @@ import os
 import json
 import pdfplumber
 from docx import Document
-from openai import OpenAI
+import google.generativeai as genai
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -13,27 +13,21 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 
 def get_working_client():
     if not GEMINI_API_KEY:
-        return None
+        return False
     try:
-        client = OpenAI(
-            api_key=GEMINI_API_KEY,
-            base_url="https://generativelanguage.googleapis.com/v1beta/openai/"
-        )
+        genai.configure(api_key=GEMINI_API_KEY)
         # Test the key with a minimal request
-        client.chat.completions.create(
-            model="gemini-2.5-flash",
-            messages=[{"role": "user", "content": "test"}],
-            max_tokens=1
-        )
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        model.generate_content("test")
         print("Working Gemini API key found!")
-        return client
+        return True
     except Exception as e:
         print(f"Key failed: {e}")
-        return None
+        return False
 
-client = get_working_client()
+is_working = get_working_client()
 
-if client is None:
+if not is_working:
     print("ERROR: No working API keys found. Check your .env file.")
     sys.exit(1)
 
@@ -105,32 +99,24 @@ class MainWindow(QWidget):
 
     def generate_flashcards(self, text):
         try:
-            response = client.chat.completions.create(
-                model="gemini-2.5-flash",
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are a flashcard generator. Given text, extract key terms and their definitions "
-                            "and return ONLY a JSON array in this exact format with no extra text:\n"
-                            '[{"term": "...", "answer": "..."}, {"term": "...", "answer": "..."}]'
-                        )
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Generate flashcards from this text:\n\n{text[:6000]}"  # cap to avoid token limits
-                    }
-                ]
+            model = genai.GenerativeModel(
+                "gemini-2.5-flash",
+                system_instruction=(
+                    "You are a flashcard generator. Given text, extract key terms and their definitions "
+                    "and return ONLY a JSON array in this exact format with no extra text:\n"
+                    '[{"term": "...", "answer": "..."}, {"term": "...", "answer": "..."}]'
+                )
             )
+            response = model.generate_content(f"Generate flashcards from this text:\n\n{text[:6000]}")
 
-            raw = response.choices[0].message.content.strip()
+            raw = response.text.strip()
             raw = raw.replace("```json", "").replace("```", "").strip()
             flashcards = json.loads(raw)
             return flashcards
 
         except Exception as e:
             print("FULL ERROR:", e)
-            QMessageBox.critical(self, "AI Error", f"Something went wrong with OpenAI:\n{str(e)}")
+            QMessageBox.critical(self, "AI Error", f"Something went wrong with Gemini API:\n{str(e)}")
             return None
 
     def save_flashcards(self, name, flashcards):
