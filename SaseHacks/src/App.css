@@ -9,32 +9,18 @@
 /* Immersive Arcade Room Environment */
 .arcade-room {
   position: absolute;
-  top: 0; left: 0;
+  top: 0;
+  left: 0;
   width: 100vw;
   height: 100vh;
   /* Darkened room with a neon glow centered behind the machine */
-  background: radial-gradient(circle at center 50%, rgba(30,30,155,0.4) 0%, rgba(5,5,15,1) 80%);
+  background: radial-gradient(circle at center 50%, rgba(30, 30, 155, 0.4) 0%, rgba(5, 5, 15, 1) 80%);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1;
 }
 
-/* Neon Exit Sign in Background */
-.arcade-room::before {
-  content: 'EXIT';
-  position: absolute;
-  top: 5%;
-  right: 8%;
-  color: #ff0055;
-  font-family: 'Courier New', Courier, monospace;
-  font-size: 2rem;
-  font-weight: bold;
-  text-shadow: 0 0 10px #ff0055, 0 0 20px #ff0055, 0 0 40px #ff0055;
-  opacity: 0.6;
-  filter: blur(1.5px);
-  z-index: -1;
-}
 
 /* Arcade Cabinet Styling */
 .arcade-cabinet {
@@ -45,7 +31,8 @@
   height: 100vh;
   max-width: none;
   background-image: url('/arcade-bg.png');
-  background-size: 100vw 100vh; /* Stretches the cabinet to ALWAYS fill your screen perfectly */
+  background-size: 100vw 100vh;
+  /* Stretches the cabinet to ALWAYS fill your screen perfectly */
   background-position: center;
   background-repeat: no-repeat;
   /* Glowing aura around the machine */
@@ -56,16 +43,20 @@
 .crt-screen {
   position: absolute;
   /* PERFECTLY CENTERS the screen in the middle of the cabinet */
-  top: 44%; /* Pushed up significantly to fit inside the new image hole */
+  top: 53%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 43%;  /* Tweaked width */
-  height: 38%; /* Tweaked height */
-  background: #021a02; /* Very dark green screen background */
-  border-radius: 8% / 12%; /* Fisheye warp bulge effect */
+  width: 32%;
+  height: 35%;
+  background: #021a02;
+  /* Very dark green screen background */
+  border-radius: 8% / 12%;
+  /* Fisheye warp bulge effect */
   overflow: hidden;
-  box-shadow: inset 0 0 40px rgba(0,0,0,0.9), 0 0 30px rgba(0,255,0,0.3); /* INSIDE shadow and OUTSIDE green glow */
-  display: flex; /* This correctly centers the START button horizontally and vertically! */
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.9), 0 0 30px rgba(0, 255, 0, 0.3);
+  /* INSIDE shadow and OUTSIDE green glow */
+  display: flex;
+  /* This correctly centers the START button horizontally and vertically! */
   align-items: center;
   justify-content: center;
 }
@@ -75,22 +66,40 @@
   content: " ";
   display: block;
   position: absolute;
-  top: 0; left: 0; bottom: 0; right: 0;
-  background: 
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background:
     linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.2) 50%),
     linear-gradient(90deg, rgba(255, 0, 0, 0.05), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.05));
-  background-size: 100% 4px, 3px 100%; /* scanline thickness */
+  background-size: 100% 4px, 3px 100%;
+  /* scanline thickness */
   z-index: 10;
   pointer-events: none;
 }
 
 /* Flickering Animation */
 @keyframes flicker {
-  0% { opacity: 0.95; }
-  5% { opacity: 0.85; }
-  10% { opacity: 0.95; }
-  15% { opacity: 1; }
-  100% { opacity: 1; }
+  0% {
+    opacity: 0.95;
+  }
+
+  5% {
+    opacity: 0.85;
+  }
+
+  10% {
+    opacity: 0.95;
+  }
+
+  15% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 1;
+  }
 }
 
 /* Glare and Flicker Layer */
@@ -98,10 +107,103 @@
   content: " ";
   display: block;
   position: absolute;
-  top: 0; left: 0; bottom: 0; right: 0;
-  background: rgba(255,255,255,0.03);
+  top: 0;
+  left: 0;
+  bottom: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.03);
   animation: flicker 0.15s infinite;
   pointer-events: none;
   z-index: 11;
   border-radius: 8% / 12%;
+}
+
+/* START Button */
+.start-btn {
+  color: #3a7a3a;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: center;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 1.1rem;
+  cursor: pointer;
+  text-shadow: 0 0 6px #3a7a3a;
+  position: relative;
+  z-index: 20;
+  letter-spacing: 0.1em;
+}
+
+.start-btn:hover {
+  color: #5aaa5a;
+  text-shadow: 0 0 10px #5aaa5a;
+  border-color: transparent;
+}
+
+/* 8-bit Pixel Menu */
+.pixel-menu {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 6% 8%;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 20;
+}
+
+.pixel-menu-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.5rem;
+  color: #5aaa5a;
+  text-shadow: 0 0 6px #3a7a3a;
+  letter-spacing: 0.15em;
+  margin-bottom: 12px;
+}
+
+.pixel-menu-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.pixel-menu-item {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.42rem;
+  color: #3a7a3a;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  text-shadow: 0 0 4px #1a4a1a;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.pixel-menu-item.active {
+  color: #7fff7f;
+  text-shadow: 0 0 8px #4af54a;
+}
+
+.pixel-arrow {
+  display: inline-block;
+  width: 10px;
+}
+
+.pixel-menu-back {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 0.35rem;
+  color: #2d5a2d;
+  cursor: pointer;
+  margin-top: 12px;
+  letter-spacing: 0.1em;
+  text-shadow: 0 0 4px #1a3a1a;
+}
+
+.pixel-menu-back:hover {
+  color: #5aaa5a;
 }

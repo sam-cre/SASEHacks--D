@@ -1,46 +1,69 @@
 import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
 import Header from './src/components/Header'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
+
+const menuItems = [
+  { id: 'flashcards', label: 'FLASHCARDS' },
+  { id: 'dungeon',    label: 'ENTER THE DUNGEON' },
+  { id: 'settings',  label: 'SETTINGS' },
+]
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [showMenu, setShowMenu] = useState(false)
+  const [selected, setSelected] = useState(0)
 
   return (
     <>
       <Header />
       <div className="arcade-room">
-        <motion.div 
+        <motion.div
           className="arcade-cabinet"
           initial={{ scale: 0.7, y: 50, opacity: 0 }}
           animate={{ scale: 1, y: 0, opacity: 1 }}
           transition={{ duration: 1.2, ease: "easeOut" }}
         >
-          {/* CRT Screen inside the cabinet */}
           <div className="crt-screen">
-            {/* The actual game or content will go inside here! */}
-            <motion.button 
-              whileHover={{ scale: 1.05, textShadow: "0px 0px 8px rgb(0, 255, 0)" }}
-              whileTap={{ scale: 0.95 }}
-              style={{ 
-                color: '#0f0', 
-                background: 'none',
-                border: 'none',
-                width: '100%',
-                textAlign: 'center', 
-                /* marginTop removed so Flexbox can center it perfectly! */
-                fontFamily: '"VT323", monospace',
-                fontSize: '4rem',
-                cursor: 'pointer',
-                textShadow: '0px 0px 4px #0f0',
-                zIndex: 20, /* ensure it sits above scanlines if needed */
-                position: 'relative'
-              }}
-            >
-              START
-            </motion.button>
+            <AnimatePresence mode="wait">
+              {!showMenu ? (
+                <motion.button
+                  key="start"
+                  className="start-btn"
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  whileHover={{ scale: 1.08 }}
+                  whileTap={{ scale: 0.92 }}
+                  onClick={() => setShowMenu(true)}
+                >
+                  START
+                </motion.button>
+              ) : (
+                <motion.div
+                  key="menu"
+                  className="pixel-menu"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.25 }}
+                >
+                  <div className="pixel-menu-title">— SELECT —</div>
+                  <div className="pixel-menu-list">
+                    {menuItems.map((item, i) => (
+                      <div
+                        key={item.id}
+                        className={`pixel-menu-item${selected === i ? ' active' : ''}`}
+                        onMouseEnter={() => setSelected(i)}
+                        onClick={() => console.log(item.id)}
+                      >
+                        <span className="pixel-arrow">{selected === i ? '▶' : '\u00A0'}</span>
+                        {item.label}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="pixel-menu-back" onClick={() => setShowMenu(false)}>
+                    ← BACK
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
         </motion.div>
       </div>
@@ -49,4 +72,3 @@ function App() {
 }
 
 export default App
-
