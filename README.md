@@ -1,6 +1,11 @@
 # SASEHacks :D
 
-Python Libraries: PyQt6, PyPDF2, requests, PyPDF2, PyQt6.QtMultimedia, PyQt6.QtAudioOutput, PyQt6.QtGui, PyQt6.QtCore, PyQt6.QtWidgets, PyQt6.QtMultimedia, PyQt6.QtAudioOutput, PyQt6.QtGui, PyQt6.QtCore, PyQt6.QtWidgets
+## Requirements
+
+To run the software, you must install the following Python packages via pip:
+```bash
+pip install PyQt6 pdfplumber python-docx google-generativeai python-dotenv requests
+```
 
 Copied Code: 
 - CSS Flip animation for flashcards
