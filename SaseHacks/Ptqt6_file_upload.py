@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 API_KEYS=[
-    os.getenv('OPENROUTER_API_KEY'),
+    os.getenv('OPENROUTER_API_KEY_1'),
     os.getenv('OPENROUTER_API_KEY_2'),
     os.getenv('OPENROUTER_API_KEY_3'),
     os.getenv('OPENROUTER_API_KEY_4'),
@@ -35,7 +35,7 @@ def get_working_client():
             print(f"Working key found: {key[:8]}...")
             return client
         except Exception as e:
-            print(f"Key failed: {key[:8]}... → {e}")
+            print(f"Key failed: {key[:8]}... -> {e}")
             continue
     return None
 
