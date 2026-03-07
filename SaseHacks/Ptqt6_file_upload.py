@@ -10,7 +10,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 API_KEYS=[
-    os.getenv('OPENROUTER_API_KEY')
+    os.getenv('OPENROUTER_API_KEY'),
+    os.getenv('OPENROUTER_API_KEY_2'),
+    os.getenv('OPENROUTER_API_KEY_3'),
+    os.getenv('OPENROUTER_API_KEY_4'),
+    os.getenv('OPENROUTER_API_KEY_5'),
+    os.getenv('OPENROUTER_API_KEY_6'),
+    os.getenv('OPENROUTER_API_KEY_7'),
+    os.getenv('OPENROUTER_API_KEY_8'),
+    os.getenv('OPENROUTER_API_KEY_9'),
 ]
 def get_working_client():
     for key in API_KEYS:
