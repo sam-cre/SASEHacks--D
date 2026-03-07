@@ -83,12 +83,15 @@ class FlashcardWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         
+        transform = QTransform()
+        
+        # Move origin to center of widget
         cw = self.width() / 2.0
         ch = self.height() / 2.0
         
-        transform = QTransform()
         transform.translate(cw, ch)
-        transform.rotate(self._rotation_y, Qt.Axis.YAxis)
+        # Apply 3D rotation with the 3rd argument as distanceToPlane for perspective projection
+        transform.rotate(self._rotation_y, Qt.Axis.YAxis, 800.0)
         transform.translate(-cw, -ch)
         
         painter.setTransform(transform)
@@ -108,7 +111,8 @@ class FlashcardWidget(QWidget):
         text_option = QTextOption(Qt.AlignmentFlag.AlignCenter)
         text_option.setWrapMode(QTextOption.WrapMode.WordWrap)
         
-        painter.drawText(rect.adjusted(20, 20, -20, -20), self.text, text_option)
+        from PyQt6.QtCore import QRectF
+        painter.drawText(QRectF(rect.adjusted(20, 20, -20, -20)), self.text, text_option)
 
 
 class FlashcardApp(QMainWindow):
@@ -234,31 +238,46 @@ class FlashcardApp(QMainWindow):
     def start_flashcards(self, item):
         filename = item.text()
         filepath = os.path.join(FLASHCARDS_DIR, filename)
+        print(f"DEBUG: Selected item: {filename}")
+        print(f"DEBUG: Filepath is: {filepath}")
         
         try:
+            print("DEBUG: Loading JSON...")
             with open(filepath, 'r', encoding='utf-8') as f:
                 self.flashcards = json.load(f)
+            print(f"DEBUG: JSON loaded successfully. Found {len(self.flashcards)} cards.")
         except Exception as e:
+            print(f"DEBUG: Exception during loading JSON: {e}")
             QMessageBox.critical(self, "Error", f"Failed to load JSON:\n{str(e)}")
             return
 
         if not self.flashcards:
+            print("DEBUG: The deck is empty.")
             QMessageBox.warning(self, "Empty Deck", "This deck has no flashcards.")
             return
 
+        print("DEBUG: Initializing card index and flipping states.")
         self.current_card_index = 0
         self.is_front = True
+        print("DEBUG: Calling update_card_display...")
         self.update_card_display(animate=False)
+        print("DEBUG: Setting current stacked widget index to 1.")
         self.stacked_widget.setCurrentIndex(1)
+        print("DEBUG: start_flashcards finished successfully.")
 
     def update_card_display(self, animate=True):
+        print(f"DEBUG: update_card_display called with animate={animate}")
         card = self.flashcards[self.current_card_index]
         text = card.get("term", "") if self.is_front else card.get("answer", "")
+        print(f"DEBUG: Retrieved text to display: '{text}' (is_front: {self.is_front})")
         
         if animate:
+            print("DEBUG: Calling self.card_widget.flip_to_text...")
             self.card_widget.flip_to_text(text)
         else:
+            print("DEBUG: Calling self.card_widget.setText...")
             self.card_widget.setText(text)
+        print("DEBUG: update_card_display finished.")
 
     def flip_card(self):
         self.is_front = not self.is_front
