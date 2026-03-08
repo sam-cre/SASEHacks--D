@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QStackedWidget, QListWidget, QMessageBox,
-    QFileDialog, QInputDialog, QScrollArea, QLineEdit, QSizePolicy,
+    QFileDialog, QScrollArea, QLineEdit, QSizePolicy,
     QFrame, QProgressBar, QGraphicsOpacityEffect
 )
 from PyQt6.QtCore import (
@@ -34,12 +34,12 @@ FLASHCARD_DIR = "FlashcardUploads"
 ASSET_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ── CRT Green Palette ─────────────────────────────────────────────────
-CRT_BG     = "#021a02"
-CRT_DARK   = "#050f05"
-CRT_DIM    = "#1a3a1a"
-CRT_GREEN  = "#3a7a3a"
-CRT_MED    = "#5aaa5a"
-CRT_BRIGHT = "#7fff7f"
+CRT_BG     = "#081a08"
+CRT_DARK   = "#0d2510"
+CRT_DIM    = "#5a8840"
+CRT_GREEN  = "#3d7a28"
+CRT_MED    = "#a8d878"
+CRT_BRIGHT = "#708090"
 DANGER_RED = "#ff4444"
 SUCCESS_GR = "#51cf66"
 
@@ -178,8 +178,8 @@ class FlashcardApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("FlashQuest — Arcade Flashcard Studio")
-        self.resize(1200, 800)
-        self.setMinimumSize(800, 600)
+        self.resize(700, 850)
+        self.setMinimumSize(500, 600)
         self.flashcards = []
         self.current_card_index = 0
         self.is_front = True
@@ -201,8 +201,9 @@ class FlashcardApp(QMainWindow):
 
         # Background image
         self.bg_label = QLabel(self.central)
-        self.bg_label.setScaledContents(True)
-        bg_path = os.path.join(ASSET_DIR, "arcade-bg.png")
+        self.bg_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.bg_label.setScaledContents(False)
+        bg_path = os.path.join(ASSET_DIR, "NONIMPORTEDASSETS", "arcade macine.png")
         self.bg_pixmap = QPixmap(bg_path) if os.path.exists(bg_path) else QPixmap()
 
         # Marquee title label (sits in the black space above the CRT screen)
@@ -213,7 +214,11 @@ class FlashcardApp(QMainWindow):
 
         # CRT screen overlay
         self.crt_screen = QWidget(self.central)
-        self.crt_screen.setStyleSheet(f"background-color: {CRT_BG}; border-radius: 8px;")
+        _forest = os.path.join(ASSET_DIR, "NONIMPORTEDASSETS", "breach.jpg").replace("\\", "/")
+        self.crt_screen.setStyleSheet(
+            f"border-image: url('{_forest}') 0 0 0 0 stretch stretch;"
+            f"border-radius: 8px;"
+        )
         crt_layout = QVBoxLayout(self.crt_screen)
         crt_layout.setContentsMargins(8, 8, 8, 8)
         self.stack = QStackedWidget()
@@ -251,18 +256,36 @@ class FlashcardApp(QMainWindow):
         super().resizeEvent(event)
         w, h = self.central.width(), self.central.height()
         self.bg_label.setGeometry(0, 0, w, h)
+
         if not self.bg_pixmap.isNull():
-            self.bg_label.setPixmap(self.bg_pixmap.scaled(
-                w, h, Qt.AspectRatioMode.IgnoreAspectRatio,
-                Qt.TransformationMode.SmoothTransformation))
-        cx, cy, cw, ch = int(w*.34), int(h*.355), int(w*.32), int(h*.35)
+            scaled = self.bg_pixmap.scaled(
+                w, h, Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation)
+            self.bg_label.setPixmap(scaled)
+
+            # Compute where the image is actually rendered (centered in the label)
+            img_w, img_h = scaled.width(), scaled.height()
+            img_x = (w - img_w) // 2
+            img_y = (h - img_h) // 2
+        else:
+            img_x, img_y, img_w, img_h = 0, 0, w, h
+
+        # These fractions describe where the white CRT area sits within the arcade image
+        # (tune these if the overlay is still slightly off)
+        cx = img_x + int(img_w * 0.33) + 1
+        cy = img_y + int(img_h * 0.29) + 3
+        cw = int(img_w * 0.34)
+        ch = int(img_h * 0.37)
+
         self.crt_screen.setGeometry(cx, cy, cw, ch)
         self.scanline.setGeometry(cx, cy, cw, ch)
         self.scanline.raise_()
-        mw = int(w * 0.32)
-        mx = int(w * 0.34)
-        my = int(h * 0.10)
-        mh = int(h * 0.18)
+
+        # Marquee sits in the top blue header of the cabinet
+        mx = img_x + int(img_w * 0.20)
+        my = img_y + int(img_h * 0.04)
+        mw = int(img_w * 0.60)
+        mh = int(img_h * 0.18)
         self.marquee_lbl.setGeometry(mx, my, mw, mh)
         self.marquee_lbl.raise_()
 
@@ -271,7 +294,7 @@ class FlashcardApp(QMainWindow):
         l = QLabel(text)
         l.setAlignment(Qt.AlignmentFlag.AlignCenter)
         l.setFont(get_font(sz))
-        l.setStyleSheet(f"color: {color}; background: transparent;")
+        l.setStyleSheet(f"color: {color}; background-color: {CRT_BG}; border-image: none; border-radius: 3px; padding: 2px 4px;")
         l.setWordWrap(True)
         return l
 
@@ -279,28 +302,29 @@ class FlashcardApp(QMainWindow):
         b = QPushButton(f"  {text}")
         b.setFont(get_font(sz))
         b.setCursor(Qt.CursorShape.PointingHandCursor)
-        b.setStyleSheet(f"QPushButton{{background:transparent;color:{CRT_GREEN};"
-                         f"border:none;padding:3px 6px;text-align:left;}}"
-                         f"QPushButton:hover{{color:{CRT_BRIGHT};}}")
+        b.setStyleSheet(f"QPushButton{{background-color:rgba(5,18,5,200);color:{CRT_BRIGHT};"
+                         f"border-image:none;border:none;padding:3px 6px;text-align:left;border-radius:4px;}}"
+                         f"QPushButton:hover{{background-color:rgba(30,70,20,220);color:#ffffff;}}")
         return b
 
     def _abtn(self, text, sz=7):
         b = QPushButton(text)
         b.setFont(get_font(sz))
         b.setCursor(Qt.CursorShape.PointingHandCursor)
-        b.setStyleSheet(f"QPushButton{{background:transparent;color:{CRT_GREEN};"
-                         f"border:1px solid {CRT_GREEN};border-radius:4px;padding:4px 8px;}}"
-                         f"QPushButton:hover{{color:{CRT_BRIGHT};border-color:{CRT_BRIGHT};"
-                         f"background:rgba(58,122,58,0.15);}}")
+        b.setStyleSheet(f"QPushButton{{background-color:rgba(5,18,5,200);color:{CRT_BRIGHT};"
+                         f"border-image:none;border:1px solid {CRT_MED};border-radius:4px;padding:4px 8px;}}"
+                         f"QPushButton:hover{{color:#ffffff;border-color:#ffffff;"
+                         f"background-color:rgba(30,70,20,220);}}")
         return b
 
     def _bbtn(self, target=0):
         b = self._mbtn("< BACK", 9)
         b.setText("< BACK")
-        b.setStyleSheet(f"QPushButton{{background:transparent;color:{CRT_MED};"
-                         f"border:1px solid {CRT_GREEN};border-radius:4px;padding:4px 14px;"
-                         f"text-align:center;}}"
-                         f"QPushButton:hover{{color:{CRT_BRIGHT};border-color:{CRT_BRIGHT};}}")
+        b.setStyleSheet(f"QPushButton{{background-color:rgba(5,18,5,200);color:{CRT_BRIGHT};"
+                         f"border-image:none;border:1px solid {CRT_MED};border-radius:4px;padding:4px 14px;"
+                         f"text-align:center;margin-top:8px;}}"
+                         f"QPushButton:hover{{color:#ffffff;border-color:#ffffff;"
+                         f"background-color:rgba(30,70,20,220);}}")
         b.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
         b.clicked.connect(lambda: self.stack.setCurrentIndex(target))
         return b
@@ -313,7 +337,7 @@ class FlashcardApp(QMainWindow):
 
     def _page(self):
         p = QWidget()
-        p.setStyleSheet("background:transparent;")
+        p.setStyleSheet("background-color: transparent; border-image: none;")
         return p
 
     # ─── page 0: START ─────────────────────────────────────────────────
@@ -324,7 +348,7 @@ class FlashcardApp(QMainWindow):
         self.start_lbl = self._lbl("START", 20, CRT_BRIGHT)
         self.start_lbl.setFont(get_font(20, bold=True))
         self.start_lbl.setStyleSheet(
-            f"color: {CRT_BRIGHT}; background: transparent;"
+            f"color: {CRT_BRIGHT}; background-color: {CRT_BG}; border-image: none;"
             f"border: 2px solid {CRT_GREEN};"
             f"border-radius: 6px; padding: 8px 24px;"
         )
@@ -404,11 +428,37 @@ class FlashcardApp(QMainWindow):
         ly.addWidget(self._lbl("Select PDF or DOCX\nto generate flashcards", 6, CRT_DIM))
         self.upload_status = self._lbl("", 6, CRT_MED)
         ly.addWidget(self.upload_status)
-        b = self._abtn("CHOOSE FILE", 7); b.clicked.connect(self._upload_file)
-        ly.addWidget(b, alignment=Qt.AlignmentFlag.AlignCenter)
+        self.upload_choose_btn = self._abtn("CHOOSE FILE", 7)
+        self.upload_choose_btn.clicked.connect(self._upload_file)
+        ly.addWidget(self.upload_choose_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        # Inline name entry (hidden until file selected)
+        self.upload_name_label = self._lbl("NAME YOUR FLASHCARDS:", 6, CRT_DIM)
+        self.upload_name_label.hide()
+        ly.addWidget(self.upload_name_label)
+
+        LE_SS = (f"QLineEdit{{background:{CRT_BG};border:1px solid {CRT_GREEN};"
+                 f"border-radius:3px;padding:4px;color:{CRT_BRIGHT};}}"
+                 f"QLineEdit:focus{{border-color:{CRT_BRIGHT};}}")
+        self.upload_name_input = QLineEdit()
+        self.upload_name_input.setFont(get_font(7))
+        self.upload_name_input.setStyleSheet(LE_SS)
+        self.upload_name_input.setPlaceholderText("e.g. Biology Chapter 3")
+        self.upload_name_input.returnPressed.connect(self._upload_confirm)
+        self.upload_name_input.hide()
+        ly.addWidget(self.upload_name_input)
+
+        self.upload_confirm_btn = self._abtn("GENERATE", 7)
+        self.upload_confirm_btn.clicked.connect(self._upload_confirm)
+        self.upload_confirm_btn.hide()
+        ly.addWidget(self.upload_confirm_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+
         ly.addStretch()
-        ly.addWidget(self._bbtn(2), alignment=Qt.AlignmentFlag.AlignCenter)
+        back = self._bbtn(2)
+        back.clicked.connect(self._reset_upload_page)
+        ly.addWidget(back, alignment=Qt.AlignmentFlag.AlignCenter)
         self.stack.addWidget(pg)
+        self._pending_extracted = ""
 
     # ─── page 4: Deck Select ──────────────────────────────────────────
     def _build_select_page(self):
@@ -546,17 +596,41 @@ class FlashcardApp(QMainWindow):
         if not extracted.strip():
             QMessageBox.warning(self, "Empty File", "No text could be extracted.")
             return
-        name, ok = QInputDialog.getText(self, "Name Your Flashcard Set",
-                                        "Enter a name for this flashcard set:")
-        if not ok or not name.strip(): return
+        self._pending_extracted = extracted
+        self.upload_status.setText(f"File loaded. Enter a name below.")
+        self.upload_choose_btn.hide()
+        self.upload_name_label.show()
+        self.upload_name_input.clear()
+        self.upload_name_input.show()
+        self.upload_name_input.setFocus()
+        self.upload_confirm_btn.show()
+
+    def _reset_upload_page(self):
+        self.upload_choose_btn.show()
+        self.upload_name_label.hide()
+        self.upload_name_input.hide()
+        self.upload_confirm_btn.hide()
+        self.upload_status.setText("")
+        self._pending_extracted = ""
+
+    def _upload_confirm(self):
+        name = self.upload_name_input.text().strip()
+        if not name:
+            self.upload_status.setText("Please enter a name.")
+            return
+        self.upload_name_label.hide()
+        self.upload_name_input.hide()
+        self.upload_confirm_btn.hide()
         self.upload_status.setText("Generating...")
         self.upload_status.repaint(); QApplication.processEvents()
-        cards = self._generate_flashcards(extracted)
+        cards = self._generate_flashcards(self._pending_extracted)
         if cards:
-            self._save_flashcards(name.strip(), cards)
-            self.upload_status.setText(f"Saved '{name.strip()}'\n{len(cards)} cards!")
+            self._save_flashcards(name, cards)
+            self.upload_status.setText(f"Saved '{name}'\n{len(cards)} cards!")
         else:
             self.upload_status.setText("Failed.")
+        self._pending_extracted = ""
+        self.upload_choose_btn.show()
 
     def _generate_flashcards(self, text):
         try:
