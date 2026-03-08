@@ -5,6 +5,10 @@ import sys
 # Initialize pygame before font operations inside components
 pygame.init()
 
+# Resolution — set by the Qt launcher via env vars, fallback to 800x600 standalone
+WIN_W = int(os.environ.get("PYGAME_WIN_W", 800))
+WIN_H = int(os.environ.get("PYGAME_WIN_H", 600))
+
 from Frame.stage_manager import StageManager, Stage
 from Frame.scroll_engine import ScrollEngine
 from Frame.game_state import GameState
@@ -19,7 +23,7 @@ from Cards.All_cards import get_reward_pool, COMMON_CARDS, RARE_CARDS, SUPER_RAR
 from question_wave.question_controller import QuestionScreen
 import random
 
-screen = pygame.display.set_mode((800, 600))
+screen = pygame.display.set_mode((WIN_W, WIN_H), pygame.RESIZABLE)
 pygame.display.set_caption("SASEHacks Game")
 clock = pygame.time.Clock()
 
@@ -43,6 +47,35 @@ msg_queue = MessageQueue()
 font = pygame.font.SysFont(None, 48)
 small_font = pygame.font.SysFont(None, 28)
 tiny_font = pygame.font.SysFont(None, 22)
+
+# HP bar images
+_ASSET_DIR = os.path.join(os.path.dirname(__file__), "..", "NONIMPORTEDASSETS")
+_hp_bar_empty = pygame.image.load(os.path.join(_ASSET_DIR, "hp-bar-empty.png")).convert_alpha()
+_hp_bar_full  = pygame.image.load(os.path.join(_ASSET_DIR, "hp-bar-full.png")).convert_alpha()
+
+# Scrolling background images — loaded once, scaled to screen height so they
+# are naturally wider than the screen for smooth horizontal scrolling.
+_BG_DIR = os.path.join(_ASSET_DIR, "Background")
+_BG_FILES = [
+    "Desert.jpg", "Mountain.webp", "ocean.jpg",
+    "Pixeldesert.jpg", "river.webp", "Swampbackground.png", "volcano.jpg",
+]
+_backgrounds = []
+for _fname in _BG_FILES:
+    _path = os.path.join(_BG_DIR, _fname)
+    try:
+        _img = pygame.image.load(_path).convert()
+        # Zoom in enough so the image is at least 4× the screen width — this
+        # gives plenty of horizontal room to pan without ever needing to tile.
+        # We pick whichever scale factor is larger: fill height OR fill 4× width.
+        _scale = max(WIN_H / _img.get_height(), WIN_W * 4 / _img.get_width())
+        _w = int(_img.get_width() * _scale)
+        _h = int(_img.get_height() * _scale)
+        _backgrounds.append(pygame.transform.scale(_img, (_w, _h)))
+    except Exception as e:
+        print(f"[BG] Could not load {_fname}: {e}")
+
+current_bg = random.choice(_backgrounds) if _backgrounds else None
 
 # State vars
 active_screen = "deck_select"
@@ -120,16 +153,21 @@ def start_deck_select():
     deck_selector._scan_decks()
 
 def start_overworld():
-    global active_screen, battle_timer, overworld_timer
+    global active_screen, battle_timer, overworld_timer, current_bg
     active_screen = "overworld"
     scroll.start_scroll()
     battle_timer = pygame.time.get_ticks()
     overworld_timer = pygame.time.get_ticks()
+    if _backgrounds:
+        current_bg = random.choice(_backgrounds)
+        scroll.offset = 0
+    player.set_mode("walk")
 
 def start_battle():
     global active_screen, enemy, drawn_cards, card_rects, battle_logic
     active_screen = "battle"
     scroll.stop_scroll()
+    player.set_mode("battle")
 
     template = game_state.get_next_enemy_template()
     if template is None:
@@ -167,10 +205,14 @@ def _recalc_card_rects():
         card_rects.append(rect)
 
 def start_post_battle_walk():
-    global active_screen, walk_timer
+    global active_screen, walk_timer, current_bg
     active_screen = "post_battle_walk"
     scroll.start_scroll()
     walk_timer = pygame.time.get_ticks()
+    if _backgrounds:
+        current_bg = random.choice(_backgrounds)
+        scroll.offset = 0
+    player.set_mode("walk")
 
 def show_card_select():
     global active_screen
@@ -427,30 +469,43 @@ def _do_enemy_turn():
 #  DRAWING HELPERS
 # ─────────────────────────────────────────────
 
+def _outlined(surf, text, font, color=(255,255,255), outline=(0,0,0), pos=(0,0)):
+    """Blit text with a 1-px black outline then white fill."""
+    ox, oy = pos
+    for dx, dy in ((-1,-1),(-1,1),(1,-1),(1,1),(-1,0),(1,0),(0,-1),(0,1)):
+        surf.blit(font.render(text, True, outline), (ox+dx, oy+dy))
+    surf.blit(font.render(text, True, color), pos)
+
 def _draw_player_hud(screen):
     hp_ratio = max(0, player.hp / player.max_hp)
-    bar_x, bar_y = 20, 20
-    bar_w, bar_h = 200, 18
-    pygame.draw.rect(screen, (80, 0, 0), (bar_x, bar_y, bar_w, bar_h))
-    if hp_ratio > 0.5:
-        bar_color = (0, 200, 0)
-    elif hp_ratio > 0.25:
-        bar_color = (255, 200, 0)
-    else:
-        bar_color = (255, 50, 50)
-    pygame.draw.rect(screen, bar_color, (bar_x, bar_y, bar_w * hp_ratio, bar_h))
-    pygame.draw.rect(screen, (255, 255, 255), (bar_x, bar_y, bar_w, bar_h), 2)
-    hp_font = pygame.font.SysFont(None, 22)
-    hp_text = hp_font.render(f"HP: {player.hp}/{player.max_hp}", True, (255, 255, 255))
-    screen.blit(hp_text, (bar_x + 5, bar_y + 1))
+    bar_x  = 20
+    bar_w, bar_h = 200, 24
 
-    # Revival indicator
+    hp_font = pygame.font.SysFont(None, 22)
+
+    # HP label sits above the bar with a small gap
+    text_y = 10
+    _outlined(screen, f"HP: {player.hp}/{player.max_hp}", hp_font,
+              pos=(bar_x, text_y))
+
+    # Bar sits below the label
+    bar_y = text_y + 18
+    empty_scaled = pygame.transform.scale(_hp_bar_empty, (bar_w, bar_h))
+    full_scaled  = pygame.transform.scale(_hp_bar_full,  (bar_w, bar_h))
+    screen.blit(empty_scaled, (bar_x, bar_y))
+    if hp_ratio > 0:
+        fill_w = int(bar_w * hp_ratio)
+        screen.blit(full_scaled, (bar_x, bar_y),
+                    area=pygame.Rect(0, 0, fill_w, bar_h))
+
+    # Revival indicator below the bar
+    revival_y = bar_y + bar_h + 4
     if game_state.revival_available and not game_state.has_revived:
-        rev_text = tiny_font.render("♥ Revival available", True, (100, 255, 200))
-        screen.blit(rev_text, (bar_x, bar_y + 22))
+        _outlined(screen, "♥ Revival available", tiny_font,
+                  color=(100, 255, 200), pos=(bar_x, revival_y))
     elif game_state.has_revived:
-        rev_text = tiny_font.render("♥ Revival used", True, (150, 150, 150))
-        screen.blit(rev_text, (bar_x, bar_y + 22))
+        _outlined(screen, "♥ Revival used", tiny_font,
+                  color=(200, 200, 200), pos=(bar_x, revival_y))
 
 
 def _draw_card(screen, card, rect, reward_mode=False):
@@ -732,7 +787,7 @@ while running:
         deck_selector.draw()
 
     elif active_screen in ["overworld", "battle", "post_battle_walk"]:
-        scroll.draw_background(screen)
+        scroll.draw_background(screen, current_bg)
         player.draw(screen)
         if active_screen == "battle" and enemy:
             enemy.draw(screen)
@@ -751,10 +806,8 @@ while running:
             if enemy:
                 tier_colors = {"easy": (100, 255, 100), "medium": (255, 200, 50), "hard": (255, 80, 80), "boss": (200, 100, 255)}
                 tier_col = tier_colors.get(enemy.tier, (255, 255, 255))
-                text = font.render(f"VS {enemy.name}", True, tier_col)
-                screen.blit(text, (300, 20))
-                tier_label = small_font.render(f"[{enemy.tier.upper()}]", True, tier_col)
-                screen.blit(tier_label, (350, 55))
+                _outlined(screen, f"VS {enemy.name}", font, color=tier_col, pos=(300, 20))
+                _outlined(screen, f"[{enemy.tier.upper()}]", small_font, color=tier_col, pos=(350, 55))
 
             if not msg_queue.is_busy():
                 if game_state.player_skip_turns > 0:

@@ -1,9 +1,10 @@
+# -*- coding: utf-8 -*-
 """
 Arcade Flashcard Studio
 Arcade-cabinet themed study tool with Gemini AI flashcard generation,
 3D-flip study mode, deck editor, and ElevenLabs TTS.
 """
-import sys, os, json, math, tempfile
+import sys, os, json, math, tempfile, subprocess
 import requests
 import pdfplumber
 from docx import Document
@@ -18,7 +19,8 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import (
     Qt, QUrl, QSize, pyqtSignal, pyqtProperty,
-    QPropertyAnimation, QEasingCurve, QRectF, QSequentialAnimationGroup, QTimer
+    QPropertyAnimation, QEasingCurve, QRectF, QRect, QSequentialAnimationGroup,
+    QParallelAnimationGroup, QTimer
 )
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtGui import (
@@ -187,6 +189,163 @@ class FlashcardWidget(QWidget):
             import traceback; traceback.print_exc()
 
 
+# ══ Dim Overlay ═══════════════════════════════════════════════════════
+class DimOverlay(QWidget):
+    """
+    Semi-transparent black layer drawn over the arcade while the game runs.
+    The game itself runs as its own borderless window centered on screen —
+    no embedding, so SDL handles all events normally.
+    """
+    back_clicked = pyqtSignal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        # Floating back button — a separate top-level window so it always
+        # appears above the game window (which is its own OS window).
+        self._back_win = QWidget(
+            None,
+            Qt.WindowType.Window |
+            Qt.WindowType.FramelessWindowHint |
+            Qt.WindowType.WindowStaysOnTopHint |
+            Qt.WindowType.Tool
+        )
+        self._back_win.setFixedHeight(36)
+        self._back_win.setStyleSheet(f"background:{CRT_BG};")
+        _lay = QHBoxLayout(self._back_win)
+        _lay.setContentsMargins(0, 0, 0, 0)
+        self._back_btn = QPushButton("< BACK TO ARCADE")
+        self._back_btn.setFont(get_font(7))
+        self._back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._back_btn.setStyleSheet(
+            f"QPushButton{{background:{CRT_BG};color:{CRT_BRIGHT};"
+            f"border:none;border-image:none;border-bottom:2px solid {CRT_MED};"
+            f"padding:4px 16px;text-align:left;}}"
+            f"QPushButton:hover{{background:{CRT_GREEN};color:#fff;}}"
+        )
+        self._back_btn.clicked.connect(self.back_clicked.emit)
+        _lay.addWidget(self._back_btn)
+
+        self._proc      = None
+        self._game_hwnd = None
+        self._poll_timer = QTimer(self)
+        self._poll_timer.setInterval(200)
+        self._poll_timer.timeout.connect(self._try_position)
+
+        # Watch for process exit so overlay cleans itself up automatically
+        self._exit_timer = QTimer(self)
+        self._exit_timer.setInterval(500)
+        self._exit_timer.timeout.connect(self._check_exit)
+
+    # ── painting ───────────────────────────────────────────────────────
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.fillRect(self.rect(), QColor(0, 0, 0, 175))   # ~70 % black
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        self._reposition_back_win()
+
+    def _reposition_back_win(self):
+        """Keep the floating back button anchored to the top of the Qt window."""
+        top = self.window().mapToGlobal(self.window().rect().topLeft())
+        self._back_win.setGeometry(top.x(), top.y(), self.window().width(), 36)
+
+    # ── game lifecycle ─────────────────────────────────────────────────
+    def launch(self):
+        self._reposition_back_win()
+        self._back_win.show()
+        game_dir = os.path.join(ASSET_DIR, "Game files")
+        self._proc = subprocess.Popen(
+            [sys.executable, os.path.join(game_dir, "main.py")],
+            cwd=game_dir,
+        )
+        self._poll_timer.start()
+        self._exit_timer.start()
+
+    def _try_position(self):
+        try:
+            import ctypes
+            hwnd = ctypes.windll.user32.FindWindowW(None, "SASEHacks Game")
+            if hwnd:
+                self._poll_timer.stop()
+                self._game_hwnd = hwnd
+                QTimer.singleShot(100, self._position_and_decorate)
+        except Exception as e:
+            print(f"[DimOverlay] poll: {e}")
+
+    def _position_and_decorate(self):
+        import ctypes, ctypes.wintypes
+        hwnd = self._game_hwnd
+
+        # ① Strip title bar / borders
+        GWL_STYLE     = -16
+        WS_CAPTION    = 0x00C00000
+        WS_THICKFRAME = 0x00040000
+        WS_SYSMENU    = 0x00080000
+        style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_STYLE)
+        ctypes.windll.user32.SetWindowLongW(
+            hwnd, GWL_STYLE,
+            style & ~WS_CAPTION & ~WS_THICKFRAME & ~WS_SYSMENU)
+
+        # ② Get the game window's current size (physical pixels, DPI-native)
+        gr = ctypes.wintypes.RECT()
+        ctypes.windll.user32.GetWindowRect(hwnd, ctypes.byref(gr))
+        gw = gr.right  - gr.left
+        gh = gr.bottom - gr.top
+
+        # ③ Get the Qt window's screen rect (map top-left to screen coords)
+        top_widget = self.window()
+        origin = top_widget.mapToGlobal(
+            top_widget.rect().topLeft()
+        )
+        qw = top_widget.frameGeometry().width()
+        qh = top_widget.frameGeometry().height()
+
+        # ④ Centre the game window over the Qt window, in logical screen coords.
+        #    Qt mapToGlobal returns logical pixels; Win32 needs physical.
+        dpr = self.devicePixelRatioF()
+        ox  = round(origin.x() * dpr)
+        oy  = round(origin.y() * dpr)
+        qwp = round(qw * dpr)
+        qhp = round(qh * dpr)
+
+        cx = ox + (qwp - gw) // 2
+        cy = oy + (qhp - gh) // 2
+
+        HWND_TOP    = 0
+        SWP_SHOWWINDOW  = 0x0040
+        SWP_FRAMECHANGED = 0x0020
+        ctypes.windll.user32.SetWindowPos(
+            hwnd, HWND_TOP,
+            cx, cy, gw, gh,
+            SWP_SHOWWINDOW | SWP_FRAMECHANGED)
+
+        ctypes.windll.user32.SetForegroundWindow(hwnd)
+
+    def _check_exit(self):
+        if self._proc and self._proc.poll() is not None:
+            # Game closed on its own
+            self._game_hwnd = None
+            self._proc = None
+            self.back_clicked.emit()
+
+    def cleanup(self):
+        self._back_win.hide()
+        self._poll_timer.stop()
+        self._exit_timer.stop()
+        if self._game_hwnd:
+            try:
+                import ctypes
+                # Post WM_CLOSE so SDL can shut down cleanly; fall back to terminate
+                ctypes.windll.user32.PostMessageW(self._game_hwnd, 0x0010, 0, 0)
+            except Exception:
+                pass
+            self._game_hwnd = None
+        if self._proc:
+            self._proc.terminate()
+            self._proc = None
+
+
 # ══ Main Application ══════════════════════════════════════════════════
 class FlashcardApp(QMainWindow):
     def __init__(self):
@@ -276,6 +435,11 @@ class FlashcardApp(QMainWindow):
         # Scanline overlay
         self.scanline = ScanlineOverlay(self.central)
 
+        # Dim overlay (covers arcade while game runs)
+        self._dungeon = DimOverlay(self.central)
+        self._dungeon.hide()
+        self._dungeon.back_clicked.connect(self._return_from_dungeon)
+
         # Build pages: 0=START, 1=MainMenu, 2=FlashcardsMenu,
         #   3=Upload, 4=DeckSelect, 5=Study, 6=End, 7=Editor, 8=Settings
         self._build_start_page()
@@ -307,8 +471,14 @@ class FlashcardApp(QMainWindow):
         print("[INFO] Pixel font not found, using fallback")
 
     def resizeEvent(self, event):
-        super().resizeEvent(event)
+        if event is not None:
+            super().resizeEvent(event)
         w, h = self.central.width(), self.central.height()
+
+        # Keep dim overlay full-size if visible (arcade layout still runs underneath)
+        if hasattr(self, '_dungeon') and self._dungeon.isVisible():
+            self._dungeon.setGeometry(0, 0, w, h)
+
         self.bg_back_label.setGeometry(0, 0, w, h)
         self.bg_label.setGeometry(0, 0, w, h)
 
@@ -412,6 +582,52 @@ class FlashcardApp(QMainWindow):
         b.clicked.connect(lambda: self.stack.setCurrentIndex(target))
         return b
 
+    # ─── Dungeon transition ────────────────────────────────────────────
+    def _enter_dungeon(self):
+        """Zoom the CRT outward while the arcade dims, then launch the game."""
+        crt_geo = self.crt_screen.geometry()
+        w, h    = self.central.width(), self.central.height()
+
+        # CRT expands to fill the whole central area
+        self._dun_geo_anim = QPropertyAnimation(self.crt_screen, b"geometry")
+        self._dun_geo_anim.setDuration(500)
+        self._dun_geo_anim.setStartValue(crt_geo)
+        self._dun_geo_anim.setEndValue(QRect(0, 0, w, h))
+        self._dun_geo_anim.setEasingCurve(QEasingCurve.Type.InOutCubic)
+
+        # Arcade machine image fades to dim
+        self._dun_fade_fx = QGraphicsOpacityEffect()
+        self.bg_label.setGraphicsEffect(self._dun_fade_fx)
+        self._dun_fade_anim = QPropertyAnimation(self._dun_fade_fx, b"opacity")
+        self._dun_fade_anim.setDuration(500)
+        self._dun_fade_anim.setStartValue(1.0)
+        self._dun_fade_anim.setEndValue(0.25)
+        self._dun_fade_anim.setEasingCurve(QEasingCurve.Type.InCubic)
+
+        self._dun_group = QParallelAnimationGroup()
+        self._dun_group.addAnimation(self._dun_geo_anim)
+        self._dun_group.addAnimation(self._dun_fade_anim)
+        self._dun_group.finished.connect(self._on_dungeon_anim_done)
+        self._dun_group.start()
+
+    def _on_dungeon_anim_done(self):
+        w, h = self.central.width(), self.central.height()
+        # Restore CRT to normal size (arcade stays visible but dimmed behind overlay)
+        self.resizeEvent(None)
+
+        # Show the dim overlay over everything — game window floats on top of OS stack
+        self._dungeon.setGeometry(0, 0, w, h)
+        self._dungeon.raise_()
+        self._dungeon.show()
+        self._dungeon.launch()
+
+    def _return_from_dungeon(self):
+        self._dungeon.cleanup()
+        self._dungeon.hide()
+        # Restore full arcade opacity
+        self.bg_label.setGraphicsEffect(self._glow_effect)
+        self.resizeEvent(None)
+
     _LS = (f"QListWidget{{background-color:{CRT_DARK};border:1px solid {CRT_GREEN};"
            f"border-radius:4px;padding:4px;color:{CRT_BRIGHT};outline:none;}}"
            f"QListWidget::item{{padding:4px;border-radius:3px;}}"
@@ -509,8 +725,7 @@ class FlashcardApp(QMainWindow):
         ly.addWidget(lbl_sel)
         ly.addSpacing(self._s(8))
         for txt, cb in [("FLASHCARDS", lambda: self.stack.setCurrentIndex(2)),
-                        ("ENTER THE DUNGEON", lambda: QMessageBox.information(
-                            self, "Coming Soon", "The Dungeon is under construction!")),
+                        ("ENTER THE DUNGEON", self._enter_dungeon),
                         ("SETTINGS", lambda: self.stack.setCurrentIndex(8))]:
             b = self._mbtn(txt, 8); b.clicked.connect(cb)
             b.setStyleSheet(b.styleSheet().replace("padding:3px 6px", "padding:5px 6px"))

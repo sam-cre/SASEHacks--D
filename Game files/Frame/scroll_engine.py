@@ -18,11 +18,14 @@ class ScrollEngine:
 
     def draw_background(self, screen, bg_image=None):
         if bg_image:
-            # Assuming bg_image is wider than screen
-            rel_x = self.offset % bg_image.get_rect().width
-            screen.blit(bg_image, (-rel_x, 0))
-            if rel_x > 0:
-                screen.blit(bg_image, (bg_image.get_rect().width - rel_x, 0))
+            sw, sh = screen.get_size()
+            iw, ih = bg_image.get_size()
+            # Clamp offset so we never scroll past the right edge
+            max_scroll = max(0, iw - sw)
+            x = -min(self.offset, max_scroll)
+            # Centre vertically if image is taller than screen
+            y = -max(0, (ih - sh) // 2)
+            screen.blit(bg_image, (x, y))
         else:
             # Draw placeholder scrolling grid
             screen.fill((50, 50, 80))
