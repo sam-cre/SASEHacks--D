@@ -27,3 +27,11 @@ UX Process
             
             
     
+CARDS
+Tail Whip
+Gator Bite
+Water Borrage
+Scratch 
+Chud Attack
+Snot Bubble
+Death Roll
