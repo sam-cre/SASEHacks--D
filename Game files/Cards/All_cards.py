@@ -6,16 +6,16 @@ from Cards.Cards import Card
 # =============================================
 
 STARTER_PAIR_A = [
-    Card("Sand Throw", 15, 15, "Gator hurls sand at the enemy",
+    Card("Sand Throw", 6, 10, "Gator hurls sand at the enemy",
          attack_type="ranged", rarity="starter", permanent=True),
-    Card("Rock Throw", 15, 15, "Gator hurls a rock at the enemy",
+    Card("Rock Throw", 6, 10, "Gator hurls a rock at the enemy",
          attack_type="ranged", rarity="starter", permanent=True),
 ]
 
 STARTER_PAIR_B = [
-    Card("Stick Poke", 10, 10, "Gator pokes the enemy with a stick",
+    Card("Stick Poke", 8, 12, "Gator pokes the enemy with a stick",
          attack_type="physical", rarity="starter", permanent=True),
-    Card("Eye Poke", 10, 10, "Gator pokes the enemy in the eye",
+    Card("Eye Poke", 8, 12, "Gator pokes the enemy in the eye",
          attack_type="physical", rarity="starter", permanent=True),
 ]
 

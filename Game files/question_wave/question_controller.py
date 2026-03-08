@@ -14,18 +14,19 @@ class QuestionScreen:
 
         self.generator = QuestionGenerator()
         self.logic = QuestionLogic(game_state)
-        self.renderer = QuestionRenderer(screen)    # ← your UI slot
+        self.renderer = QuestionRenderer(screen)
         self.events = QuestionEvents()
 
-        self.current_input = ""     # tracks free response typing
-        self.answer_submitted = False
         self.show_summary = False
         self.summary_timer = 0
         self.summary_duration = 3000
+        self.choice_rects = []
 
     def start(self):
         """Called automatically when QUESTION_WAVE stage is entered"""
-        questions = self.generator.generate_wave()
+        self.show_summary = False
+        self.choice_rects = []
+        questions = self.generator.generate_wave(count=3)
         self.logic.load_wave(questions)
 
     def handle_event(self, event):
@@ -33,18 +34,11 @@ class QuestionScreen:
         if not question or self.show_summary:
             return
 
+        # MC only — check for clicks
         if question["type"] == "multiple_choice":
             chosen = self.events.check_choice_click(event, self.choice_rects)
             if chosen is not None:
                 correct = self.logic.submit_answer(chosen)
-                self.check_wave_complete()
-
-        elif question["type"] == "free_response":
-            typed, submitted = self.events.handle_typing(event, self.current_input)
-            self.current_input = typed
-            if submitted:
-                correct = self.logic.submit_answer(self.current_input)
-                self.current_input = ""
                 self.check_wave_complete()
 
     def check_wave_complete(self):
@@ -56,10 +50,8 @@ class QuestionScreen:
         """Called every frame — auto transitions after summary"""
         if self.show_summary and self.logic.result:
             if pygame.time.get_ticks() - self.summary_timer > self.summary_duration:
-                if self.logic.result == "pass":
-                    self.stage_manager.transition_to(Stage.CARD_REWARD)
-                else:
-                    self.stage_manager.transition_to(Stage.NEXT_STAGE)
+                # Always transition to card reward — reward quality varies
+                self.stage_manager.transition_to(Stage.CARD_REWARD)
 
     def draw(self):
         self.renderer.draw_background()
@@ -67,10 +59,7 @@ class QuestionScreen:
 
         if self.show_summary:
             self.renderer.draw_score_summary(self.logic.get_score())
-            if self.logic.result == "fail":
-                self.renderer.draw_damage_warning(self.game_state.damage_multiplier)
-            else:
-                self.renderer.draw_reward_notification()
+            # Show performance tier message (already handled in renderer)
             return
 
         if question:
@@ -78,6 +67,3 @@ class QuestionScreen:
 
             if question["type"] == "multiple_choice":
                 self.choice_rects = self.renderer.draw_multiple_choice(question["choices"])
-
-            elif question["type"] == "free_response":
-                self.renderer.draw_free_response(self.current_input)
