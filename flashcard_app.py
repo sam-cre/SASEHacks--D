@@ -13,8 +13,8 @@ from dotenv import load_dotenv
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QStackedWidget, QListWidget, QListWidgetItem, QListView,
-    QMessageBox, QFileDialog, QScrollArea, QLineEdit, QSizePolicy,
-    QFrame, QProgressBar, QGraphicsOpacityEffect, QGraphicsDropShadowEffect
+    QMessageBox, QFileDialog, QScrollArea, QLineEdit, QTextEdit, QSizePolicy,
+    QFrame, QProgressBar, QSlider, QGraphicsOpacityEffect, QGraphicsDropShadowEffect
 )
 from PyQt6.QtCore import (
     Qt, QUrl, QSize, pyqtSignal, pyqtProperty,
@@ -49,10 +49,24 @@ FALLBACK   = "Courier New"
 
 SIZE_OFFSET = 3
 
+def _compute_scale():
+    """Return a scale factor based on screen resolution and DPI."""
+    screen = QApplication.primaryScreen()
+    if screen is None:
+        return 1.0
+    dpr = screen.devicePixelRatio()
+    logical_dpi = screen.logicalDotsPerInch()
+    # Base reference: 1080p at 96 DPI = scale 1.0
+    res_scale = screen.size().height() / 1080.0
+    dpi_scale = logical_dpi / 96.0
+    return max(0.6, min(2.0, (res_scale + dpi_scale) / 2.0))
+
 def get_font(size=10, bold=False):
-    f = QFont(PIXEL_FONT, size + SIZE_OFFSET)
+    scale = _compute_scale()
+    scaled_size = max(1, round((size + SIZE_OFFSET) * scale))
+    f = QFont(PIXEL_FONT, scaled_size)
     if not f.exactMatch():
-        f = QFont(FALLBACK, size + SIZE_OFFSET)
+        f = QFont(FALLBACK, scaled_size)
     if bold:
         f.setBold(True)
     return f
@@ -178,8 +192,11 @@ class FlashcardApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("FlashQuest — Arcade Flashcard Studio")
-        self.resize(700, 850)
-        self.setMinimumSize(500, 600)
+        screen = QApplication.primaryScreen().availableGeometry()
+        win_w = int(screen.width() * 0.45)
+        win_h = int(screen.height() * 0.85)
+        self.resize(win_w, win_h)
+        self.setMinimumSize(int(screen.width() * 0.25), int(screen.height() * 0.40))
         self.flashcards = []
         self.current_card_index = 0
         self.is_front = True
@@ -254,7 +271,7 @@ class FlashcardApp(QMainWindow):
         self.scanline = ScanlineOverlay(self.central)
 
         # Build pages: 0=START, 1=MainMenu, 2=FlashcardsMenu,
-        #   3=Upload, 4=DeckSelect, 5=Study, 6=End, 7=Editor
+        #   3=Upload, 4=DeckSelect, 5=Study, 6=End, 7=Editor, 8=Settings
         self._build_start_page()
         self._build_main_menu()
         self._build_flashcards_menu()
@@ -263,6 +280,7 @@ class FlashcardApp(QMainWindow):
         self._build_study_page()
         self._build_end_page()
         self._build_editor_page()
+        self._build_settings_page()
         self.stack.setCurrentIndex(0)
 
 
@@ -478,8 +496,7 @@ class FlashcardApp(QMainWindow):
         for txt, cb in [("FLASHCARDS", lambda: self.stack.setCurrentIndex(2)),
                         ("ENTER THE DUNGEON", lambda: QMessageBox.information(
                             self, "Coming Soon", "The Dungeon is under construction!")),
-                        ("SETTINGS", lambda: QMessageBox.information(
-                            self, "Settings", "Settings coming soon!"))]:
+                        ("SETTINGS", lambda: self.stack.setCurrentIndex(8))]:
             b = self._mbtn(txt, 8); b.clicked.connect(cb)
             b.setStyleSheet(b.styleSheet().replace("padding:3px 6px", "padding:5px 6px"))
             ly.addWidget(b)
@@ -674,9 +691,9 @@ class FlashcardApp(QMainWindow):
         br2 = QHBoxLayout(); br2.setSpacing(4)
         ba = self._abtn("+ ADD", 6); ba.clicked.connect(self._editor_add_card)
         bs = self._abtn("SAVE", 6)
-        bs.setStyleSheet(f"QPushButton{{background:transparent;color:{SUCCESS_GR};"
-                          f"border:1px solid {SUCCESS_GR};border-radius:4px;padding:3px 6px;}}"
-                          f"QPushButton:hover{{background:rgba(81,207,102,0.15);}}")
+        bs.setStyleSheet(f"QPushButton{{background-color:{CRT_BG};color:{CRT_BRIGHT};"
+                          f"border-image:none;border:1px solid {CRT_MED};border-radius:4px;padding:3px 6px;}}"
+                          f"QPushButton:hover{{color:#ffffff;border-color:#ffffff;background-color:{CRT_GREEN};}}")
         bs.setFont(get_font(6)); bs.clicked.connect(self._editor_save)
         be = self._abtn("< BACK", 6); be.clicked.connect(lambda: self.editor_sub_stack.setCurrentIndex(0))
         for b in (ba, bs, be): br2.addWidget(b)
@@ -687,6 +704,75 @@ class FlashcardApp(QMainWindow):
         self.stack.addWidget(pg)
 
     # ══ Deck helpers ══════════════════════════════════════════════════
+    # ─── page 8: Settings ─────────────────────────────────────────────
+    def _build_settings_page(self):
+        pg = self._page()
+        ly = QVBoxLayout(pg); ly.setContentsMargins(10,10,10,10); ly.setSpacing(8)
+        ly.addWidget(self._lbl("SETTINGS", 9))
+
+        SLIDER_SS = (f"QSlider::groove:horizontal{{height:6px;background:{CRT_DARK};"
+                     f"border-radius:3px;}}"
+                     f"QSlider::handle:horizontal{{background:{CRT_BRIGHT};width:14px;height:14px;"
+                     f"margin:-4px 0;border-radius:7px;border-image:none;}}"
+                     f"QSlider::sub-page:horizontal{{background:{CRT_GREEN};border-radius:3px;}}")
+
+        def _row(label_text, widget):
+            row = QHBoxLayout(); row.setSpacing(8)
+            lbl = QLabel(label_text); lbl.setFont(get_font(6))
+            lbl.setStyleSheet(f"color:{CRT_BRIGHT};background-color:{CRT_BG};"
+                              f"border:1px solid black;border-image:none;border-radius:3px;padding:2px 4px;")
+            lbl.setFixedWidth(120)
+            row.addWidget(lbl); row.addWidget(widget)
+            ly.addLayout(row)
+
+        # Audio volume
+        self.vol_slider = QSlider(Qt.Orientation.Horizontal)
+        self.vol_slider.setRange(0, 100); self.vol_slider.setValue(80)
+        self.vol_slider.setStyleSheet(SLIDER_SS)
+        self.vol_slider.valueChanged.connect(
+            lambda v: self.audio_output.setVolume(v / 100.0))
+        _row("VOLUME", self.vol_slider)
+
+        # Flip animation speed
+        self.flip_slider = QSlider(Qt.Orientation.Horizontal)
+        self.flip_slider.setRange(50, 500); self.flip_slider.setValue(250)
+        self.flip_slider.setStyleSheet(SLIDER_SS)
+        self.flip_slider.valueChanged.connect(
+            lambda v: setattr(self.card_widget.anim, 'duration', None) or
+                      self.card_widget.anim.setDuration(v))
+        _row("FLIP SPEED", self.flip_slider)
+
+        # Card flip animation toggle
+        self._anim_enabled = True
+        self.anim_btn = self._abtn("ON", 6)
+        def _toggle_anim():
+            self._anim_enabled = not self._anim_enabled
+            self.anim_btn.setText("ON" if self._anim_enabled else "OFF")
+        self.anim_btn.clicked.connect(_toggle_anim)
+        _row("FLIP ANIM", self.anim_btn)
+
+        # Auto-advance toggle
+        self._auto_advance = False
+        self.auto_btn = self._abtn("OFF", 6)
+        def _toggle_auto():
+            self._auto_advance = not self._auto_advance
+            self.auto_btn.setText("ON" if self._auto_advance else "OFF")
+        self.auto_btn.clicked.connect(_toggle_auto)
+        _row("AUTO NEXT", self.auto_btn)
+
+        # Read aloud toggle
+        self._read_aloud_enabled = True
+        self.read_btn = self._abtn("ON", 6)
+        def _toggle_read():
+            self._read_aloud_enabled = not self._read_aloud_enabled
+            self.read_btn.setText("ON" if self._read_aloud_enabled else "OFF")
+        self.read_btn.clicked.connect(_toggle_read)
+        _row("READ ALOUD", self.read_btn)
+
+        ly.addStretch()
+        ly.addWidget(self._bbtn(1), alignment=Qt.AlignmentFlag.AlignCenter)
+        self.stack.addWidget(pg)
+
     def _load_decks(self, lw):
         lw.clear()
         files = sorted(f for f in os.listdir(FLASHCARD_DIR) if f.endswith(".json"))
@@ -855,25 +941,33 @@ class FlashcardApp(QMainWindow):
 
     def _add_editor_row(self, term="", answer=""):
         fr = QFrame()
-        fr.setStyleSheet(f"QFrame{{background:{CRT_DARK};border:1px solid {CRT_GREEN};"
-                          f"border-radius:4px;padding:4px;}}")
-        rl = QVBoxLayout(fr); rl.setSpacing(3); rl.setContentsMargins(4,4,4,4)
-        LE_SS = (f"QLineEdit{{background:{CRT_BG};border:1px solid {CRT_GREEN};"
-                 f"border-radius:3px;padding:3px;color:{CRT_BRIGHT};}}"
-                 f"QLineEdit:focus{{border-color:{CRT_BRIGHT};}}")
-        lt = QLabel("TERM"); lt.setFont(get_font(5))
-        lt.setStyleSheet(f"color:{CRT_DIM};border:none;")
-        te = QLineEdit(term); te.setFont(get_font(6)); te.setStyleSheet(LE_SS)
-        la = QLabel("ANSWER"); la.setFont(get_font(5))
-        la.setStyleSheet(f"color:{CRT_DIM};border:none;")
-        ae = QLineEdit(answer); ae.setFont(get_font(6)); ae.setStyleSheet(LE_SS)
-        bd = QPushButton("X"); bd.setFont(get_font(5))
-        bd.setStyleSheet(f"QPushButton{{background:transparent;color:{DANGER_RED};"
-                          f"border:1px solid {DANGER_RED};border-radius:3px;padding:2px 6px;}}"
-                          f"QPushButton:hover{{background:rgba(255,68,68,0.15);}}")
-        bd.setMaximumWidth(40)
+        fr.setStyleSheet(f"QFrame{{background:{CRT_DARK};border:2px solid {CRT_GREEN};"
+                          f"border-radius:8px;padding:8px;}}")
+        rl = QVBoxLayout(fr); rl.setSpacing(8); rl.setContentsMargins(10,10,10,10)
+        TE_SS = (f"QTextEdit{{background:{CRT_BG};border:1px solid {CRT_GREEN};"
+                 f"border-radius:5px;padding:6px;color:{CRT_BRIGHT};border-image:none;}}"
+                 f"QTextEdit:focus{{border:2px solid {CRT_BRIGHT};}}")
+        LBL_SS = f"color:{CRT_BRIGHT};border:none;background:transparent;border-image:none;"
+
+        lt = QLabel("TERM"); lt.setFont(get_font(6))
+        lt.setStyleSheet(LBL_SS)
+        te = QTextEdit(term); te.setFont(get_font(7)); te.setStyleSheet(TE_SS)
+        te.setMinimumHeight(70); te.setMaximumHeight(100)
+
+        la = QLabel("ANSWER"); la.setFont(get_font(6))
+        la.setStyleSheet(LBL_SS)
+        ae = QTextEdit(answer); ae.setFont(get_font(7)); ae.setStyleSheet(TE_SS)
+        ae.setMinimumHeight(70); ae.setMaximumHeight(100)
+
+        bd = QPushButton("✕ REMOVE"); bd.setFont(get_font(5))
+        bd.setStyleSheet(f"QPushButton{{background:{CRT_BG};color:#ffffff;"
+                          f"border:1px solid {CRT_MED};border-radius:4px;padding:4px 8px;"
+                          f"border-image:none;}}"
+                          f"QPushButton:hover{{color:#ffffff;border-color:#ffffff;background-color:{CRT_GREEN};}}")
         bd.clicked.connect(lambda checked, f=fr: self._editor_remove_row(f))
-        rl.addWidget(lt); rl.addWidget(te); rl.addWidget(la); rl.addWidget(ae)
+
+        rl.addWidget(lt); rl.addWidget(te)
+        rl.addWidget(la); rl.addWidget(ae)
         rl.addWidget(bd, alignment=Qt.AlignmentFlag.AlignRight)
         self._editor_rows.append((fr, te, ae))
         idx = max(0, self.editor_cards_layout.count() - 1)
@@ -888,7 +982,7 @@ class FlashcardApp(QMainWindow):
     def _editor_save(self):
         cards = []
         for _, te, ae in self._editor_rows:
-            t, a = te.text().strip(), ae.text().strip()
+            t, a = te.toPlainText().strip(), ae.toPlainText().strip()
             if t or a: cards.append({"term": t, "answer": a})
         fp = os.path.join(FLASHCARD_DIR, self._editor_filename)
         with open(fp, "w", encoding="utf-8") as f: json.dump(cards, f, indent=4)
