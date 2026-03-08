@@ -200,7 +200,7 @@ class FlashcardApp(QMainWindow):
         # Background image
         self.bg_label = QLabel(self.central)
         self.bg_label.setScaledContents(True)
-        bg_path = os.path.join(ASSET_DIR, "arcadeMachine.png")
+        bg_path = os.path.join(ASSET_DIR, "arcade-bg.png")
         self.bg_pixmap = QPixmap(bg_path) if os.path.exists(bg_path) else QPixmap()
 
         # CRT screen overlay
@@ -247,35 +247,12 @@ class FlashcardApp(QMainWindow):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         w, h = self.central.width(), self.central.height()
-
-        # Scale background image preserving aspect ratio, centered
+        self.bg_label.setGeometry(0, 0, w, h)
         if not self.bg_pixmap.isNull():
-            img_ratio = self.bg_pixmap.width() / self.bg_pixmap.height()
-            win_ratio = w / h if h > 0 else 1
-            if win_ratio > img_ratio:
-                # Window is wider — fit to width
-                bw = w
-                bh = int(w / img_ratio)
-            else:
-                # Window is taller — fit to height
-                bh = h
-                bw = int(h * img_ratio)
-            bx = (w - bw) // 2
-            by = (h - bh) // 2
-            self.bg_label.setGeometry(bx, by, bw, bh)
             self.bg_label.setPixmap(self.bg_pixmap.scaled(
-                bw, bh, Qt.AspectRatioMode.IgnoreAspectRatio,
+                w, h, Qt.AspectRatioMode.IgnoreAspectRatio,
                 Qt.TransformationMode.SmoothTransformation))
-        else:
-            bx, by, bw, bh = 0, 0, w, h
-            self.bg_label.setGeometry(0, 0, w, h)
-
-        # Position CRT screen to match the arcade cabinet's screen area
-        # These percentages are relative to the background image placement
-        cx = bx + int(bw * 0.337)
-        cy = by + int(bh * 0.141)
-        cw = int(bw * 0.328)
-        ch = int(bh * 0.436)
+        cx, cy, cw, ch = int(w*.34), int(h*.355), int(w*.32), int(h*.35)
         self.crt_screen.setGeometry(cx, cy, cw, ch)
         self.scanline.setGeometry(cx, cy, cw, ch)
         self.scanline.raise_()
