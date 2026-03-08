@@ -38,3 +38,44 @@ Snot Bubble - Gator spits a bubble of snot at the enemy (Range of damage, 10-20,
 Death Roll - Upgraded version of barrel roll, Gator rolls on the enemy dealing massive damage (Range of damage, 35-55)
 Barrel Roll - Gator rolls out of the way of the enemy attack (50% chance to dodge next attack)
 Water Bubble - Gator spits a bubble of water at the enemy (Range of damage, 10-25)
+
+
+ENEMIES
+
+-- Easy --
+Sludge : A slimeball with one eye
+- Can throw slime, halt the user for one turn, 5 damage
+- Can Disgust the user, decreasing the users attack on the next turn
+- Health (50-75)
+
+Natbat : A fast bat
+- Every attack has a 20% chance to miss
+- Can sky dive attack (10 damage)
+- Can Bite (5 damage)
+- Health (30-40)
+
+Medium
+Vexshroom - A mushroom with legs that can cast spells
+- Can doze, user skips a turn
+- Can cast a vine spell that drains from the user and gives it to the enemy (15 damage)
+- Health (40-45)
+
+Tombworm - A worm with burrowing ability
+- Can Coffin Slam — crashes a segment into you (10 damage)
+- Confusion - The user becomes confused and can not move for 2 turns
+- Health (60)
+
+Hard
+The Warden - An armored guard that weilds keys as a weapon
+- Can summon an iron maiden (35 damage)
+- Can throw his keys (20 damage)
+- Health (120)
+
+THE Boss
+The Cube - Nobody knows what it is. Nobody asks.
+
+Can Corner Jab — strikes with a sharp edge (40 damage)
+Can Flatten — slowly rolls toward you, massive but slow (50 damage, 30% chance to miss)
+Can Rotate — skips a turn, but all your attacks deal half damage next turn for some reason
+Health (200)
+
