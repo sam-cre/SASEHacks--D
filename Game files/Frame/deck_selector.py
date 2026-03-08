@@ -27,9 +27,14 @@ class DeckSelector:
     def _build_rects(self):
         """Build clickable rectangles for each deck."""
         self.deck_rects = []
-        start_y = 200
+        sw, sh = self.screen.get_size()
+        start_y = int(sh * 0.34)
+        btn_w = int(sw * 0.58)
+        btn_h = max(40, int(sh * 0.075))
+        x = (sw - btn_w) // 2
+        spacing = max(10, int(sh * 0.02))
         for i, name in enumerate(self.deck_files):
-            rect = pygame.Rect(200, start_y + i * 60, 400, 45)
+            rect = pygame.Rect(x, start_y + i * (btn_h + spacing), btn_w, btn_h)
             self.deck_rects.append(rect)
 
     def handle_event(self, event):
@@ -45,18 +50,28 @@ class DeckSelector:
 
     def draw(self):
         """Draw the deck selection screen."""
+        self._build_rects()
         self.screen.fill((10, 10, 30))
+        sw, sh = self.screen.get_size()
+        font_path = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "..", "PressStart2P-Regular.ttf"))
+
+        def pfont(size):
+            px = max(8, int(size * 0.72))
+            try:
+                return pygame.font.Font(font_path, px)
+            except Exception:
+                return pygame.font.SysFont(None, px)
 
         # Title
-        title_font = pygame.font.SysFont(None, 52)
+        title_font = pfont(52)
         title = title_font.render("Choose Your Flashcard Deck", True, (100, 255, 150))
-        title_rect = title.get_rect(center=(400, 100))
+        title_rect = title.get_rect(center=(sw // 2, int(sh * 0.17)))
         self.screen.blit(title, title_rect)
 
         # Subtitle
-        sub_font = pygame.font.SysFont(None, 26)
+        sub_font = pfont(26)
         sub = sub_font.render("Questions will be drawn from this deck during battles", True, (180, 180, 180))
-        sub_rect = sub.get_rect(center=(400, 145))
+        sub_rect = sub.get_rect(center=(sw // 2, int(sh * 0.24)))
         self.screen.blit(sub, sub_rect)
 
         if not self.deck_files:
@@ -65,7 +80,7 @@ class DeckSelector:
             return
 
         # Deck buttons
-        btn_font = pygame.font.SysFont(None, 30)
+        btn_font = pfont(30)
         for i, name in enumerate(self.deck_files):
             rect = self.deck_rects[i]
             mouse_pos = pygame.mouse.get_pos()

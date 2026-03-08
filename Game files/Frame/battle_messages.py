@@ -3,6 +3,7 @@ Pokémon-style battle message queue.
 Messages display one at a time with a typewriter effect at the bottom of the screen.
 """
 import pygame
+import os
 
 # Message types for color coding
 MSG_ATTACK  = "attack"
@@ -18,6 +19,20 @@ MSG_COLORS = {
     MSG_INFO:    (255, 255, 255),   # White
     MSG_MISS:    (180, 180, 180),   # Grey
 }
+
+_FONT_CACHE = {}
+_PIXEL_FONT_PATH = os.path.normpath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "PressStart2P-Regular.ttf")
+)
+
+def _font(size):
+    size = max(8, int(size * 0.72))
+    if size not in _FONT_CACHE:
+        try:
+            _FONT_CACHE[size] = pygame.font.Font(_PIXEL_FONT_PATH, size)
+        except Exception:
+            _FONT_CACHE[size] = pygame.font.SysFont(None, size)
+    return _FONT_CACHE[size]
 
 class BattleMessage:
     def __init__(self, text, msg_type=MSG_INFO, duration=1500):
@@ -150,12 +165,12 @@ class MessageQueue:
 
         # Typewriter text
         visible_text = msg.text[:self.char_index]
-        font = pygame.font.SysFont(None, 28)
+        font = _font(28)
         text_surf = font.render(visible_text, True, msg.color)
         screen.blit(text_surf, (box_rect.x + 15, box_rect.y + 15))
 
         # "Click to continue" hint when fully revealed
         if self.fully_revealed:
-            hint_font = pygame.font.SysFont(None, 18)
+            hint_font = _font(18)
             hint = hint_font.render("▼ click to continue", True, (150, 150, 150))
             screen.blit(hint, (box_rect.x + 600, box_rect.y + 55))

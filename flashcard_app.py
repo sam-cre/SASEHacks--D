@@ -200,31 +200,6 @@ class DimOverlay(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        # Floating back button — a separate top-level window so it always
-        # appears above the game window (which is its own OS window).
-        self._back_win = QWidget(
-            None,
-            Qt.WindowType.Window |
-            Qt.WindowType.FramelessWindowHint |
-            Qt.WindowType.WindowStaysOnTopHint |
-            Qt.WindowType.Tool
-        )
-        self._back_win.setFixedHeight(36)
-        self._back_win.setStyleSheet(f"background:{CRT_BG};")
-        _lay = QHBoxLayout(self._back_win)
-        _lay.setContentsMargins(0, 0, 0, 0)
-        self._back_btn = QPushButton("< BACK TO ARCADE")
-        self._back_btn.setFont(get_font(7))
-        self._back_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._back_btn.setStyleSheet(
-            f"QPushButton{{background:{CRT_BG};color:{CRT_BRIGHT};"
-            f"border:none;border-image:none;border-bottom:2px solid {CRT_MED};"
-            f"padding:4px 16px;text-align:left;}}"
-            f"QPushButton:hover{{background:{CRT_GREEN};color:#fff;}}"
-        )
-        self._back_btn.clicked.connect(self.back_clicked.emit)
-        _lay.addWidget(self._back_btn)
-
         self._proc      = None
         self._game_hwnd = None
         self._poll_timer = QTimer(self)
@@ -241,23 +216,16 @@ class DimOverlay(QWidget):
         p = QPainter(self)
         p.fillRect(self.rect(), QColor(0, 0, 0, 175))   # ~70 % black
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        self._reposition_back_win()
-
-    def _reposition_back_win(self):
-        """Keep the floating back button anchored to the top of the Qt window."""
-        top = self.window().mapToGlobal(self.window().rect().topLeft())
-        self._back_win.setGeometry(top.x(), top.y(), self.window().width(), 36)
-
     # ── game lifecycle ─────────────────────────────────────────────────
-    def launch(self):
-        self._reposition_back_win()
-        self._back_win.show()
+    def launch(self, game_w=1024, game_h=768):
         game_dir = os.path.join(ASSET_DIR, "Game files")
+        env = os.environ.copy()
+        env["PYGAME_WIN_W"] = str(game_w)
+        env["PYGAME_WIN_H"] = str(game_h)
         self._proc = subprocess.Popen(
             [sys.executable, os.path.join(game_dir, "main.py")],
             cwd=game_dir,
+            env=env,
         )
         self._poll_timer.start()
         self._exit_timer.start()
@@ -330,7 +298,6 @@ class DimOverlay(QWidget):
             self.back_clicked.emit()
 
     def cleanup(self):
-        self._back_win.hide()
         self._poll_timer.stop()
         self._exit_timer.stop()
         if self._game_hwnd:
@@ -359,6 +326,7 @@ class FlashcardApp(QMainWindow):
         self.flashcards = []
         self.current_card_index = 0
         self.is_front = True
+        self._game_size = (1024, 768)   # default game window resolution
 
         self.player = QMediaPlayer()
         self.audio_output = QAudioOutput()
@@ -619,7 +587,8 @@ class FlashcardApp(QMainWindow):
         self._dungeon.setGeometry(0, 0, w, h)
         self._dungeon.raise_()
         self._dungeon.show()
-        self._dungeon.launch()
+        gw, gh = self._game_size
+        self._dungeon.launch(gw, gh)
 
     def _return_from_dungeon(self):
         self._dungeon.cleanup()
@@ -730,6 +699,7 @@ class FlashcardApp(QMainWindow):
             b = self._mbtn(txt, 8); b.clicked.connect(cb)
             b.setStyleSheet(b.styleSheet().replace("padding:3px 6px", "padding:5px 6px"))
             ly.addWidget(b)
+
         ly.addSpacing(self._s(8))
         ly.addWidget(self._bbtn(0), alignment=Qt.AlignmentFlag.AlignCenter)
         ly.addStretch()
@@ -819,8 +789,8 @@ class FlashcardApp(QMainWindow):
         self.study_deck_list.setFont(get_font(7))
         self.study_deck_list.setStyleSheet(self._LS)
         self.study_deck_list.setViewMode(QListView.ViewMode.IconMode)
-        self.study_deck_list.setIconSize(QSize(self._s(64), self._s(64)))
-        self.study_deck_list.setGridSize(QSize(self._s(90), self._s(90)))
+        self.study_deck_list.setIconSize(QSize(self._s(104), self._s(104)))
+        self.study_deck_list.setGridSize(QSize(self._s(140), self._s(150)))
         self.study_deck_list.setResizeMode(QListView.ResizeMode.Adjust)
         self.study_deck_list.setWordWrap(True)
         self.study_deck_list.setSpacing(self._s(8))
@@ -888,8 +858,8 @@ class FlashcardApp(QMainWindow):
         self.editor_deck_list.setFont(get_font(7))
         self.editor_deck_list.setStyleSheet(self._LS)
         self.editor_deck_list.setViewMode(QListView.ViewMode.IconMode)
-        self.editor_deck_list.setIconSize(QSize(self._s(64), self._s(64)))
-        self.editor_deck_list.setGridSize(QSize(self._s(90), self._s(90)))
+        self.editor_deck_list.setIconSize(QSize(self._s(104), self._s(104)))
+        self.editor_deck_list.setGridSize(QSize(self._s(140), self._s(150)))
         self.editor_deck_list.setResizeMode(QListView.ResizeMode.Adjust)
         self.editor_deck_list.setWordWrap(True)
         self.editor_deck_list.setSpacing(self._s(8))
@@ -1011,9 +981,10 @@ class FlashcardApp(QMainWindow):
                                     "No flashcard decks found. Upload a document first!")
         icon_path = os.path.join(ASSET_DIR, "NONIMPORTEDASSETS", "file-full.png")
         icon = QIcon(icon_path)
-        lw.setIconSize(QSize(self._s(64), self._s(64)))
+        lw.setIconSize(QSize(self._s(104), self._s(104)))
         for f in files:
             item = QListWidgetItem(icon, f)
+            item.setTextAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
             lw.addItem(item)
 
     # ══ Upload logic ══════════════════════════════════════════════════
