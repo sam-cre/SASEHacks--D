@@ -4,6 +4,7 @@ from question_wave.question_events import QuestionEvents
 from question_wave.question_generator import QuestionGenerator
 
 from Frame.stage_manager import Stage
+import pygame
 
 class QuestionScreen:
     def __init__(self, screen, game_state, stage_manager):
@@ -19,6 +20,8 @@ class QuestionScreen:
         self.current_input = ""     # tracks free response typing
         self.answer_submitted = False
         self.show_summary = False
+        self.summary_timer = 0
+        self.summary_duration = 3000
 
     def start(self):
         """Called automatically when QUESTION_WAVE stage is entered"""
@@ -47,14 +50,16 @@ class QuestionScreen:
     def check_wave_complete(self):
         if self.logic.wave_complete:
             self.show_summary = True
+            self.summary_timer = pygame.time.get_ticks()
 
     def update(self):
         """Called every frame — auto transitions after summary"""
         if self.show_summary and self.logic.result:
-            if self.logic.result == "pass":
-                self.stage_manager.transition_to(Stage.CARD_REWARD)
-            else:
-                self.stage_manager.transition_to(Stage.NEXT_STAGE)
+            if pygame.time.get_ticks() - self.summary_timer > self.summary_duration:
+                if self.logic.result == "pass":
+                    self.stage_manager.transition_to(Stage.CARD_REWARD)
+                else:
+                    self.stage_manager.transition_to(Stage.NEXT_STAGE)
 
     def draw(self):
         self.renderer.draw_background()

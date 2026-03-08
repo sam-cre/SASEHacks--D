@@ -5,6 +5,7 @@ class Stage(Enum):
     BATTLE = auto()
     CARD_SELECT = auto()
     QUESTION_WAVE = auto()
+    POST_BATTLE_WALK = auto()
     CARD_REWARD = auto()
     GAME_OVER = auto()
     NEXT_STAGE = auto()

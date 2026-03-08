@@ -48,7 +48,7 @@ class QuestionLogic:
         self.wave_complete = True
         # Check pass/fail (e.g., 50% required)
         pass_ratio = self.score / len(self.questions) if self.questions else 0
-        if pass_ratio >= 0.5:
+        if pass_ratio > 0.6:
             self.result = "pass"
             self.game_state.damage_multiplier = 1.0
         else:
