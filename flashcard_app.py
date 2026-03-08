@@ -12,18 +12,18 @@ from dotenv import load_dotenv
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QPushButton, QLabel, QStackedWidget, QListWidget, QMessageBox,
-    QFileDialog, QScrollArea, QLineEdit, QSizePolicy,
-    QFrame, QProgressBar, QGraphicsOpacityEffect
+    QPushButton, QLabel, QStackedWidget, QListWidget, QListWidgetItem, QListView,
+    QMessageBox, QFileDialog, QScrollArea, QLineEdit, QSizePolicy,
+    QFrame, QProgressBar, QGraphicsOpacityEffect, QGraphicsDropShadowEffect
 )
 from PyQt6.QtCore import (
-    Qt, QUrl, pyqtSignal, pyqtProperty,
-    QPropertyAnimation, QEasingCurve, QRectF, QSequentialAnimationGroup
+    Qt, QUrl, QSize, pyqtSignal, pyqtProperty,
+    QPropertyAnimation, QEasingCurve, QRectF, QSequentialAnimationGroup, QTimer
 )
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtGui import (
     QFont, QPainter, QTransform, QPen, QColor, QTextOption,
-    QLinearGradient, QPixmap, QFontDatabase
+    QLinearGradient, QPixmap, QFontDatabase, QIcon
 )
 
 # ── Configuration ──────────────────────────────────────────────────────
@@ -34,12 +34,12 @@ FLASHCARD_DIR = "FlashcardUploads"
 ASSET_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ── CRT Green Palette ─────────────────────────────────────────────────
-CRT_BG     = "#081a08"
-CRT_DARK   = "#0d2510"
-CRT_DIM    = "#5a8840"
-CRT_GREEN  = "#3d7a28"
-CRT_MED    = "#a8d878"
-CRT_BRIGHT = "#708090"
+CRT_BG     = "#483D8B"
+CRT_DARK   = "#071428"
+CRT_DIM    = "#4a6a9a"
+CRT_GREEN  = "#1e5fa8"
+CRT_MED    = "#7aabdc"
+CRT_BRIGHT = "#ffffff"
 DANGER_RED = "#ff4444"
 SUCCESS_GR = "#51cf66"
 
@@ -194,17 +194,42 @@ class FlashcardApp(QMainWindow):
         # Central widget — absolute positioning
         self.central = QWidget()
         self.setCentralWidget(self.central)
-        self.central.setStyleSheet(
-            "background: qradialgradient(cx:0.5, cy:0.5, radius:0.7, "
-            "fx:0.5, fy:0.5, stop:0 rgba(20,20,130,200), stop:1 rgba(2,2,8,255));"
-        )
+        self.central.setStyleSheet("background: transparent;")
 
-        # Background image
+        # Base background (background.png, fills entire window)
+        self.bg_back_label = QLabel(self.central)
+        self.bg_back_label.setScaledContents(True)
+        back_path = os.path.join(ASSET_DIR, "NONIMPORTEDASSETS", "background.png")
+        self.bg_back_pixmap = QPixmap(back_path) if os.path.exists(back_path) else QPixmap()
+        if not self.bg_back_pixmap.isNull():
+            self.bg_back_label.setPixmap(self.bg_back_pixmap)
+
+        # Arcade machine overlay (sits on top of background)
         self.bg_label = QLabel(self.central)
         self.bg_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.bg_label.setScaledContents(False)
+        self.bg_label.setStyleSheet("background: transparent;")
         bg_path = os.path.join(ASSET_DIR, "NONIMPORTEDASSETS", "arcade macine.png")
         self.bg_pixmap = QPixmap(bg_path) if os.path.exists(bg_path) else QPixmap()
+
+
+        # Glow animation on arcade machine
+        self._glow_effect = QGraphicsDropShadowEffect()
+        self._glow_effect.setOffset(0, 0)
+        self._glow_effect.setColor(QColor(255, 255, 255, 180))
+        self._glow_effect.setBlurRadius(40)
+        self.bg_label.setGraphicsEffect(self._glow_effect)
+        glow_out = QPropertyAnimation(self._glow_effect, b"blurRadius")
+        glow_out.setDuration(2000); glow_out.setStartValue(20); glow_out.setEndValue(80)
+        glow_out.setEasingCurve(QEasingCurve.Type.InOutSine)
+        glow_in = QPropertyAnimation(self._glow_effect, b"blurRadius")
+        glow_in.setDuration(2000); glow_in.setStartValue(80); glow_in.setEndValue(20)
+        glow_in.setEasingCurve(QEasingCurve.Type.InOutSine)
+        self._glow_anim = QSequentialAnimationGroup()
+        self._glow_anim.addAnimation(glow_out)
+        self._glow_anim.addAnimation(glow_in)
+        self._glow_anim.setLoopCount(-1)
+        self._glow_anim.start()
 
         # Marquee title label (sits in the black space above the CRT screen)
         self.marquee_lbl = QLabel("FLASHQUEST", self.central)
@@ -223,6 +248,7 @@ class FlashcardApp(QMainWindow):
         crt_layout.setContentsMargins(8, 8, 8, 8)
         self.stack = QStackedWidget()
         crt_layout.addWidget(self.stack)
+
 
         # Scanline overlay
         self.scanline = ScanlineOverlay(self.central)
@@ -255,6 +281,7 @@ class FlashcardApp(QMainWindow):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         w, h = self.central.width(), self.central.height()
+        self.bg_back_label.setGeometry(0, 0, w, h)
         self.bg_label.setGeometry(0, 0, w, h)
 
         if not self.bg_pixmap.isNull():
@@ -281,6 +308,7 @@ class FlashcardApp(QMainWindow):
         self.scanline.setGeometry(cx, cy, cw, ch)
         self.scanline.raise_()
 
+
         # Marquee sits in the top blue header of the cabinet
         mx = img_x + int(img_w * 0.20)
         my = img_y + int(img_h * 0.04)
@@ -294,7 +322,8 @@ class FlashcardApp(QMainWindow):
         l = QLabel(text)
         l.setAlignment(Qt.AlignmentFlag.AlignCenter)
         l.setFont(get_font(sz))
-        l.setStyleSheet(f"color: {color}; background-color: {CRT_BG}; border-image: none; border-radius: 3px; padding: 2px 4px;")
+        l.setStyleSheet(f"QLabel{{color: {color}; background-color: {CRT_BG}; border-image: none; border: 1px solid black; border-radius: 3px; padding: 2px 4px;}}"
+                        f"QLabel:hover{{border: 1px solid white;}}")
         l.setWordWrap(True)
         return l
 
@@ -302,35 +331,60 @@ class FlashcardApp(QMainWindow):
         b = QPushButton(f"  {text}")
         b.setFont(get_font(sz))
         b.setCursor(Qt.CursorShape.PointingHandCursor)
-        b.setStyleSheet(f"QPushButton{{background-color:rgba(5,18,5,200);color:{CRT_BRIGHT};"
-                         f"border-image:none;border:none;padding:3px 6px;text-align:left;border-radius:4px;}}"
-                         f"QPushButton:hover{{background-color:rgba(30,70,20,220);color:#ffffff;}}")
+        b._slide_p = 0.0
+        b._slide_tgt = 0.0
+
+        def _apply(btn):
+            pl = 6 + btn._slide_p * 14
+            btn.setStyleSheet(
+                f"QPushButton{{background-color:{CRT_BG};color:{CRT_BRIGHT};"
+                f"border-image:none;border:none;padding:3px 6px 3px {pl:.1f}px;"
+                f"text-align:left;border-radius:4px;}}"
+                f"QPushButton:hover{{background-color:{CRT_GREEN};color:#ffffff;}}")
+
+        def _tick():
+            b._slide_p += (b._slide_tgt - b._slide_p) * 0.12
+            _apply(b)
+
+        timer = QTimer(b)
+        timer.setInterval(16)
+        timer.timeout.connect(_tick)
+        timer.start()
+
+        b.enterEvent = lambda e: setattr(b, '_slide_tgt', 1.0)
+        b.leaveEvent = lambda e: setattr(b, '_slide_tgt', 0.0)
+        _apply(b)
         return b
 
     def _abtn(self, text, sz=7):
         b = QPushButton(text)
         b.setFont(get_font(sz))
         b.setCursor(Qt.CursorShape.PointingHandCursor)
-        b.setStyleSheet(f"QPushButton{{background-color:rgba(5,18,5,200);color:{CRT_BRIGHT};"
+        b.setStyleSheet(f"QPushButton{{background-color:{CRT_BG};color:{CRT_BRIGHT};"
                          f"border-image:none;border:1px solid {CRT_MED};border-radius:4px;padding:4px 8px;}}"
                          f"QPushButton:hover{{color:#ffffff;border-color:#ffffff;"
-                         f"background-color:rgba(30,70,20,220);}}")
+                         f"background-color:{CRT_GREEN};}}")
         return b
 
     def _bbtn(self, target=0):
         b = self._mbtn("< BACK", 9)
         b.setText("< BACK")
-        b.setStyleSheet(f"QPushButton{{background-color:rgba(5,18,5,200);color:{CRT_BRIGHT};"
-                         f"border-image:none;border:1px solid {CRT_MED};border-radius:4px;padding:4px 14px;"
+        # Remove slide animation from back button
+        for child in b.findChildren(QTimer):
+            child.stop()
+        b.enterEvent = lambda e: None
+        b.leaveEvent = lambda e: None
+        b.setStyleSheet(f"QPushButton{{background-color:{CRT_BG};color:{CRT_BRIGHT};"
+                         f"border-image:none;border:1px solid {CRT_MED};border-radius:4px;padding:6px 14px;"
                          f"text-align:center;margin-top:8px;}}"
                          f"QPushButton:hover{{color:#ffffff;border-color:#ffffff;"
-                         f"background-color:rgba(30,70,20,220);}}")
+                         f"background-color:{CRT_GREEN};}}")
         b.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
         b.clicked.connect(lambda: self.stack.setCurrentIndex(target))
         return b
 
     _LS = (f"QListWidget{{background-color:{CRT_DARK};border:1px solid {CRT_GREEN};"
-           f"border-radius:4px;padding:4px;color:{CRT_GREEN};outline:none;}}"
+           f"border-radius:4px;padding:4px;color:{CRT_BRIGHT};outline:none;}}"
            f"QListWidget::item{{padding:4px;border-radius:3px;}}"
            f"QListWidget::item:hover{{background:rgba(58,122,58,0.2);color:{CRT_BRIGHT};}}"
            f"QListWidget::item:selected{{background:{CRT_GREEN};color:{CRT_BG};}}")
@@ -344,38 +398,70 @@ class FlashcardApp(QMainWindow):
     def _build_start_page(self):
         pg = self._page()
         ly = QVBoxLayout(pg); ly.setContentsMargins(10,10,10,10)
-        ly.addStretch()
-        self.start_lbl = self._lbl("START", 20, CRT_BRIGHT)
+
+        # Floating container — START label is absolutely positioned inside
+        float_widget = QWidget()
+        float_widget.setFixedHeight(100)
+        float_widget.setStyleSheet("background: transparent; border-image: none;")
+        self.start_lbl = QLabel("START", float_widget)
         self.start_lbl.setFont(get_font(20, bold=True))
         self.start_lbl.setStyleSheet(
-            f"color: {CRT_BRIGHT}; background-color: {CRT_BG}; border-image: none;"
-            f"border: 2px solid {CRT_GREEN};"
-            f"border-radius: 6px; padding: 8px 24px;"
+            "color: #ffffff; background-color: #483D8B; border-image: none;"
+            "border: 2px solid #1e5fa8; border-radius: 6px; padding: 8px 24px;"
         )
-        self.start_lbl.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
-        ly.addWidget(self.start_lbl, alignment=Qt.AlignmentFlag.AlignCenter)
-        ly.addSpacing(20)
-        ly.addWidget(self._lbl("PRESS START TO BEGIN", 6, CRT_MED))
+        self.start_lbl.adjustSize()
 
-        # Breathing animation
-        effect = QGraphicsOpacityEffect(self.start_lbl)
-        self.start_lbl.setGraphicsEffect(effect)
-        anim_out = QPropertyAnimation(effect, b"opacity")
-        anim_out.setDuration(1000)
-        anim_out.setStartValue(1.0)
-        anim_out.setEndValue(0.3)
-        anim_out.setEasingCurve(QEasingCurve.Type.InOutSine)
-        anim_in = QPropertyAnimation(effect, b"opacity")
-        anim_in.setDuration(1000)
-        anim_in.setStartValue(0.3)
-        anim_in.setEndValue(1.0)
-        anim_in.setEasingCurve(QEasingCurve.Type.InOutSine)
-        self._breath = QSequentialAnimationGroup()
-        self._breath.addAnimation(anim_out)
-        self._breath.addAnimation(anim_in)
-        self._breath.setLoopCount(-1)
-        self._breath.start()
+        self.start_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
+
         ly.addStretch()
+        ly.addWidget(float_widget)
+        ly.addStretch()
+
+        # PRESS START TO BEGIN at the bottom, no background
+        press_lbl = QLabel("PRESS START TO BEGIN")
+        press_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        press_lbl.setFont(get_font(6))
+        press_lbl.setStyleSheet(f"color: {CRT_BRIGHT}; background: transparent; border-image: none;")
+        ly.addWidget(press_lbl)
+
+        # Hover tracking
+        self._hover_p = 0.0   # 0=normal, 1=hovered
+        self._hover_tgt = 0.0
+        def on_enter(e): self._hover_tgt = 1.0
+        def on_leave(e): self._hover_tgt = 0.0
+        self.start_lbl.enterEvent = on_enter
+        self.start_lbl.leaveEvent = on_leave
+
+        # Combined float + smooth hover timer (~60fps)
+        self._float_t = 0.0
+        def do_float():
+            self._float_t += 0.025
+
+            # Smooth lerp hover progress
+            self._hover_p += (self._hover_tgt - self._hover_p) * 0.06
+
+            # Font stays fixed — only padding grows (smooth, no integer jumps)
+            pad_v = 8  + self._hover_p * 12
+            pad_h = 24 + self._hover_p * 22
+
+            self.start_lbl.setFont(get_font(20, bold=True))
+            self.start_lbl.setStyleSheet(
+                f"color: #ffffff; background-color: #483D8B; border-image: none;"
+                f"border: 2px solid #1e5fa8; border-radius: 6px;"
+                f"padding: {pad_v:.1f}px {pad_h:.1f}px;"
+            )
+
+            offset = int(math.sin(self._float_t) * 8)
+            self.start_lbl.adjustSize()
+            x = max(0, (float_widget.width() - self.start_lbl.width()) // 2)
+            y = (float_widget.height() - self.start_lbl.height()) // 2 + offset
+            self.start_lbl.move(x, y)
+
+        self._float_timer = QTimer()
+        self._float_timer.setInterval(16)
+        self._float_timer.timeout.connect(do_float)
+        self._float_timer.start()
+
         pg.mousePressEvent = lambda e: self.stack.setCurrentIndex(1)
         self.start_lbl.mousePressEvent = lambda e: self.stack.setCurrentIndex(1)
         self.stack.addWidget(pg)
@@ -385,14 +471,18 @@ class FlashcardApp(QMainWindow):
         pg = self._page()
         ly = QVBoxLayout(pg); ly.setContentsMargins(10,10,10,10); ly.setSpacing(4)
         ly.addStretch()
-        ly.addWidget(self._lbl("- SELECT -", 8, CRT_MED))
+        lbl_sel = self._lbl("- SELECT -", 8, CRT_MED)
+        lbl_sel.setStyleSheet(lbl_sel.styleSheet().replace("border: 1px solid black;", "border: none;").replace("QLabel:hover{border: 1px solid white;}", ""))
+        ly.addWidget(lbl_sel)
         ly.addSpacing(8)
         for txt, cb in [("FLASHCARDS", lambda: self.stack.setCurrentIndex(2)),
                         ("ENTER THE DUNGEON", lambda: QMessageBox.information(
                             self, "Coming Soon", "The Dungeon is under construction!")),
                         ("SETTINGS", lambda: QMessageBox.information(
                             self, "Settings", "Settings coming soon!"))]:
-            b = self._mbtn(txt, 8); b.clicked.connect(cb); ly.addWidget(b)
+            b = self._mbtn(txt, 8); b.clicked.connect(cb)
+            b.setStyleSheet(b.styleSheet().replace("padding:3px 6px", "padding:5px 6px"))
+            ly.addWidget(b)
         ly.addSpacing(8)
         ly.addWidget(self._bbtn(0), alignment=Qt.AlignmentFlag.AlignCenter)
         ly.addStretch()
@@ -403,12 +493,16 @@ class FlashcardApp(QMainWindow):
         pg = self._page()
         ly = QVBoxLayout(pg); ly.setContentsMargins(10,10,10,10); ly.setSpacing(4)
         ly.addStretch()
-        ly.addWidget(self._lbl("- FLASHCARDS -", 8, CRT_MED))
+        lbl_fc = self._lbl("- FLASHCARDS -", 8, CRT_MED)
+        lbl_fc.setStyleSheet(lbl_fc.styleSheet().replace("border: 1px solid black;", "border: none;").replace("QLabel:hover{border: 1px solid white;}", ""))
+        ly.addWidget(lbl_fc)
         ly.addSpacing(8)
         for txt, cb in [("UPLOAD DOC", lambda: self.stack.setCurrentIndex(3)),
                         ("STUDY DECK", self._go_study),
                         ("EDIT DECK", self._go_editor)]:
-            b = self._mbtn(txt, 8); b.clicked.connect(cb); ly.addWidget(b)
+            b = self._mbtn(txt, 8); b.clicked.connect(cb)
+            b.setStyleSheet(b.styleSheet().replace("padding:3px 6px", "padding:5px 6px"))
+            ly.addWidget(b)
         ly.addSpacing(8)
         ly.addWidget(self._bbtn(1), alignment=Qt.AlignmentFlag.AlignCenter)
         ly.addStretch()
@@ -424,8 +518,12 @@ class FlashcardApp(QMainWindow):
     def _build_upload_page(self):
         pg = self._page()
         ly = QVBoxLayout(pg); ly.setContentsMargins(8,8,8,8); ly.setSpacing(6)
-        ly.addWidget(self._lbl("UPLOAD DOC", 9))
-        ly.addWidget(self._lbl("Select PDF or DOCX\nto generate flashcards", 6, CRT_DIM))
+        lbl_upload = self._lbl("UPLOAD DOC", 9)
+        lbl_upload.setStyleSheet(lbl_upload.styleSheet().replace("padding: 2px 4px", "padding: 5px 4px"))
+        ly.addWidget(lbl_upload)
+        lbl_sub = self._lbl("Select PDF or DOCX\nto generate flashcards", 6, CRT_DIM)
+        lbl_sub.setStyleSheet(lbl_sub.styleSheet().replace("padding: 2px 4px", "padding: 5px 4px"))
+        ly.addWidget(lbl_sub)
         self.upload_status = self._lbl("", 6, CRT_MED)
         ly.addWidget(self.upload_status)
         self.upload_choose_btn = self._abtn("CHOOSE FILE", 7)
@@ -464,10 +562,21 @@ class FlashcardApp(QMainWindow):
     def _build_select_page(self):
         pg = self._page()
         ly = QVBoxLayout(pg); ly.setContentsMargins(8,8,8,8); ly.setSpacing(4)
-        ly.addWidget(self._lbl("SELECT DECK", 9))
+        ly.addStretch()
+        lbl_select = self._lbl("SELECT DECK", 9)
+        lbl_select.setStyleSheet(lbl_select.styleSheet().replace("padding: 2px 4px", "padding: 8px 4px").replace("border: 1px solid black;", "border: none;").replace("QLabel:hover{border: 1px solid white;}", ""))
+        lbl_select.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        ly.addWidget(lbl_select)
+        ly.addStretch()
         self.study_deck_list = QListWidget()
         self.study_deck_list.setFont(get_font(7))
         self.study_deck_list.setStyleSheet(self._LS)
+        self.study_deck_list.setViewMode(QListView.ViewMode.IconMode)
+        self.study_deck_list.setIconSize(QSize(64, 64))
+        self.study_deck_list.setGridSize(QSize(90, 90))
+        self.study_deck_list.setResizeMode(QListView.ResizeMode.Adjust)
+        self.study_deck_list.setWordWrap(True)
+        self.study_deck_list.setSpacing(8)
         self.study_deck_list.itemClicked.connect(self._start_study)
         ly.addWidget(self.study_deck_list, stretch=1)
         ly.addWidget(self._bbtn(2), alignment=Qt.AlignmentFlag.AlignCenter)
@@ -531,12 +640,18 @@ class FlashcardApp(QMainWindow):
         self.editor_deck_list = QListWidget()
         self.editor_deck_list.setFont(get_font(7))
         self.editor_deck_list.setStyleSheet(self._LS)
+        self.editor_deck_list.setViewMode(QListView.ViewMode.IconMode)
+        self.editor_deck_list.setIconSize(QSize(64, 64))
+        self.editor_deck_list.setGridSize(QSize(90, 90))
+        self.editor_deck_list.setResizeMode(QListView.ResizeMode.Adjust)
+        self.editor_deck_list.setWordWrap(True)
+        self.editor_deck_list.setSpacing(8)
         self.editor_deck_list.itemClicked.connect(self._open_editor)
         s0l.addWidget(self.editor_deck_list, stretch=1)
         bd = self._abtn("DELETE DECK", 6)
-        bd.setStyleSheet(f"QPushButton{{background:transparent;color:{DANGER_RED};"
-                          f"border:1px solid {DANGER_RED};border-radius:4px;padding:3px 6px;}}"
-                          f"QPushButton:hover{{background:rgba(255,68,68,0.15);}}")
+        bd.setStyleSheet(f"QPushButton{{background-color:{CRT_BG};color:{CRT_BRIGHT};"
+                          f"border-image:none;border:1px solid {CRT_MED};border-radius:4px;padding:3px 6px;}}"
+                          f"QPushButton:hover{{color:#ffffff;border-color:#ffffff;background-color:{CRT_GREEN};}}")
         bd.setFont(get_font(6)); bd.clicked.connect(self._delete_deck)
         s0l.addWidget(bd)
         s0l.addWidget(self._bbtn(2))
@@ -578,8 +693,12 @@ class FlashcardApp(QMainWindow):
         if not files:
             QMessageBox.information(self, "No Decks",
                                     "No flashcard decks found. Upload a document first!")
+        icon_path = os.path.join(ASSET_DIR, "NONIMPORTEDASSETS", "file-full.png")
+        icon = QIcon(icon_path)
+        lw.setIconSize(QSize(64, 64))
         for f in files:
-            lw.addItem(f)
+            item = QListWidgetItem(icon, f)
+            lw.addItem(item)
 
     # ══ Upload logic ══════════════════════════════════════════════════
     def _upload_file(self):
