@@ -5,8 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 const menuItems = [
   { id: 'flashcards', label: 'FLASHCARDS' },
-  { id: 'dungeon',    label: 'ENTER THE DUNGEON' },
-  { id: 'settings',  label: 'SETTINGS' },
+  { id: 'dungeon', label: 'ENTER THE DUNGEON' },
+  { id: 'settings', label: 'SETTINGS' },
 ]
 
 function App() {
@@ -18,7 +18,7 @@ function App() {
       <Header />
       <div className="arcade-room">
         <motion.div
-          className="arcade-cabinet"
+          className="arcadeMachine"
           initial={{ scale: 0.7, y: 50, opacity: 0 }}
           animate={{ scale: 1, y: 0, opacity: 1 }}
           transition={{ duration: 1.2, ease: "easeOut" }}

@@ -23,14 +23,14 @@
 
 
 /* Arcade Cabinet Styling */
-.arcade-cabinet {
+.arcadeMachine {
   position: absolute;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
   max-width: none;
-  background-image: url('/arcade-bg.png');
+  background-image: url('/arcadeMachine.png');
   background-size: 100vw 100vh;
   /* Stretches the cabinet to ALWAYS fill your screen perfectly */
   background-position: center;
