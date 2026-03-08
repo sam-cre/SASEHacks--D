@@ -14,11 +14,11 @@ from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QStackedWidget, QListWidget, QMessageBox,
     QFileDialog, QInputDialog, QScrollArea, QLineEdit, QSizePolicy,
-    QFrame, QProgressBar
+    QFrame, QProgressBar, QGraphicsOpacityEffect
 )
 from PyQt6.QtCore import (
     Qt, QUrl, pyqtSignal, pyqtProperty,
-    QPropertyAnimation, QEasingCurve, QRectF, QTimer
+    QPropertyAnimation, QEasingCurve, QRectF, QSequentialAnimationGroup
 )
 from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtGui import (
@@ -47,10 +47,12 @@ SUCCESS_GR = "#51cf66"
 PIXEL_FONT = "Press Start 2P"
 FALLBACK   = "Courier New"
 
+SIZE_OFFSET = 3
+
 def get_font(size=10, bold=False):
-    f = QFont(PIXEL_FONT, size)
+    f = QFont(PIXEL_FONT, size + SIZE_OFFSET)
     if not f.exactMatch():
-        f = QFont(FALLBACK, size)
+        f = QFont(FALLBACK, size + SIZE_OFFSET)
     if bold:
         f.setBold(True)
     return f
@@ -193,8 +195,8 @@ class FlashcardApp(QMainWindow):
         self.central = QWidget()
         self.setCentralWidget(self.central)
         self.central.setStyleSheet(
-            "background: qradialgradient(cx:0.5, cy:0.5, radius:0.8, "
-            "fx:0.5, fy:0.5, stop:0 rgba(30,30,155,100), stop:1 rgba(5,5,15,255));"
+            "background: qradialgradient(cx:0.5, cy:0.5, radius:0.7, "
+            "fx:0.5, fy:0.5, stop:0 rgba(20,20,130,200), stop:1 rgba(2,2,8,255));"
         )
 
         # Background image
@@ -202,6 +204,12 @@ class FlashcardApp(QMainWindow):
         self.bg_label.setScaledContents(True)
         bg_path = os.path.join(ASSET_DIR, "arcade-bg.png")
         self.bg_pixmap = QPixmap(bg_path) if os.path.exists(bg_path) else QPixmap()
+
+        # Marquee title label (sits in the black space above the CRT screen)
+        self.marquee_lbl = QLabel("FLASHQUEST", self.central)
+        self.marquee_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.marquee_lbl.setFont(get_font(18, bold=True))
+        self.marquee_lbl.setStyleSheet(f"color: {CRT_BRIGHT}; background: transparent;")
 
         # CRT screen overlay
         self.crt_screen = QWidget(self.central)
@@ -226,11 +234,6 @@ class FlashcardApp(QMainWindow):
         self._build_editor_page()
         self.stack.setCurrentIndex(0)
 
-        # Blink timer for START
-        self._start_vis = True
-        self._blink = QTimer()
-        self._blink.timeout.connect(self._blink_start)
-        self._blink.start(800)
 
     def _load_pixel_font(self):
         global PIXEL_FONT
@@ -256,6 +259,12 @@ class FlashcardApp(QMainWindow):
         self.crt_screen.setGeometry(cx, cy, cw, ch)
         self.scanline.setGeometry(cx, cy, cw, ch)
         self.scanline.raise_()
+        mw = int(w * 0.32)
+        mx = int(w * 0.34)
+        my = int(h * 0.10)
+        mh = int(h * 0.18)
+        self.marquee_lbl.setGeometry(mx, my, mw, mh)
+        self.marquee_lbl.raise_()
 
     # ─── UI helpers ────────────────────────────────────────────────────
     def _lbl(self, text, sz=9, color=CRT_BRIGHT):
@@ -286,10 +295,13 @@ class FlashcardApp(QMainWindow):
         return b
 
     def _bbtn(self, target=0):
-        b = self._mbtn("< BACK", 7)
-        b.setStyleSheet(f"QPushButton{{background:transparent;color:{CRT_DIM};"
-                         f"border:none;padding:3px 6px;}}"
-                         f"QPushButton:hover{{color:{CRT_MED};}}")
+        b = self._mbtn("< BACK", 9)
+        b.setText("< BACK")
+        b.setStyleSheet(f"QPushButton{{background:transparent;color:{CRT_MED};"
+                         f"border:1px solid {CRT_GREEN};border-radius:4px;padding:4px 14px;"
+                         f"text-align:center;}}"
+                         f"QPushButton:hover{{color:{CRT_BRIGHT};border-color:{CRT_BRIGHT};}}")
+        b.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
         b.clicked.connect(lambda: self.stack.setCurrentIndex(target))
         return b
 
@@ -309,18 +321,40 @@ class FlashcardApp(QMainWindow):
         pg = self._page()
         ly = QVBoxLayout(pg); ly.setContentsMargins(10,10,10,10)
         ly.addStretch()
-        self.start_lbl = self._lbl("START", 14, CRT_GREEN)
-        ly.addWidget(self.start_lbl)
-        ly.addWidget(self._lbl("PRESS TO BEGIN", 6, CRT_DIM))
+        self.start_lbl = self._lbl("START", 20, CRT_BRIGHT)
+        self.start_lbl.setFont(get_font(20, bold=True))
+        self.start_lbl.setStyleSheet(
+            f"color: {CRT_BRIGHT}; background: transparent;"
+            f"border: 2px solid {CRT_GREEN};"
+            f"border-radius: 6px; padding: 8px 24px;"
+        )
+        self.start_lbl.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
+        ly.addWidget(self.start_lbl, alignment=Qt.AlignmentFlag.AlignCenter)
+        ly.addSpacing(20)
+        ly.addWidget(self._lbl("PRESS START TO BEGIN", 6, CRT_MED))
+
+        # Breathing animation
+        effect = QGraphicsOpacityEffect(self.start_lbl)
+        self.start_lbl.setGraphicsEffect(effect)
+        anim_out = QPropertyAnimation(effect, b"opacity")
+        anim_out.setDuration(1000)
+        anim_out.setStartValue(1.0)
+        anim_out.setEndValue(0.3)
+        anim_out.setEasingCurve(QEasingCurve.Type.InOutSine)
+        anim_in = QPropertyAnimation(effect, b"opacity")
+        anim_in.setDuration(1000)
+        anim_in.setStartValue(0.3)
+        anim_in.setEndValue(1.0)
+        anim_in.setEasingCurve(QEasingCurve.Type.InOutSine)
+        self._breath = QSequentialAnimationGroup()
+        self._breath.addAnimation(anim_out)
+        self._breath.addAnimation(anim_in)
+        self._breath.setLoopCount(-1)
+        self._breath.start()
         ly.addStretch()
         pg.mousePressEvent = lambda e: self.stack.setCurrentIndex(1)
         self.start_lbl.mousePressEvent = lambda e: self.stack.setCurrentIndex(1)
         self.stack.addWidget(pg)
-
-    def _blink_start(self):
-        if self.stack.currentIndex() == 0:
-            self._start_vis = not self._start_vis
-            self.start_lbl.setVisible(self._start_vis)
 
     # ─── page 1: Main Menu ─────────────────────────────────────────────
     def _build_main_menu(self):
@@ -336,7 +370,7 @@ class FlashcardApp(QMainWindow):
                             self, "Settings", "Settings coming soon!"))]:
             b = self._mbtn(txt, 8); b.clicked.connect(cb); ly.addWidget(b)
         ly.addSpacing(8)
-        ly.addWidget(self._bbtn(0))
+        ly.addWidget(self._bbtn(0), alignment=Qt.AlignmentFlag.AlignCenter)
         ly.addStretch()
         self.stack.addWidget(pg)
 
@@ -352,7 +386,7 @@ class FlashcardApp(QMainWindow):
                         ("EDIT DECK", self._go_editor)]:
             b = self._mbtn(txt, 8); b.clicked.connect(cb); ly.addWidget(b)
         ly.addSpacing(8)
-        ly.addWidget(self._bbtn(1))
+        ly.addWidget(self._bbtn(1), alignment=Qt.AlignmentFlag.AlignCenter)
         ly.addStretch()
         self.stack.addWidget(pg)
 
@@ -373,7 +407,7 @@ class FlashcardApp(QMainWindow):
         b = self._abtn("CHOOSE FILE", 7); b.clicked.connect(self._upload_file)
         ly.addWidget(b, alignment=Qt.AlignmentFlag.AlignCenter)
         ly.addStretch()
-        ly.addWidget(self._bbtn(2))
+        ly.addWidget(self._bbtn(2), alignment=Qt.AlignmentFlag.AlignCenter)
         self.stack.addWidget(pg)
 
     # ─── page 4: Deck Select ──────────────────────────────────────────
@@ -386,7 +420,7 @@ class FlashcardApp(QMainWindow):
         self.study_deck_list.setStyleSheet(self._LS)
         self.study_deck_list.itemClicked.connect(self._start_study)
         ly.addWidget(self.study_deck_list, stretch=1)
-        ly.addWidget(self._bbtn(2))
+        ly.addWidget(self._bbtn(2), alignment=Qt.AlignmentFlag.AlignCenter)
         self.stack.addWidget(pg)
 
     # ─── page 5: Study ────────────────────────────────────────────────
@@ -417,7 +451,7 @@ class FlashcardApp(QMainWindow):
         for b in (self.btn_prev, self.btn_flip, self.btn_read, self.btn_next):
             ctrl.addWidget(b)
         ly.addLayout(ctrl)
-        ly.addWidget(self._bbtn(2))
+        ly.addWidget(self._bbtn(2), alignment=Qt.AlignmentFlag.AlignCenter)
         self.stack.addWidget(pg)
 
     # ─── page 6: End ──────────────────────────────────────────────────
