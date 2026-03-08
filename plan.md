@@ -28,10 +28,13 @@ UX Process
             
     
 CARDS
-Tail Whip
-Gator Bite
-Water Borrage
-Scratch 
-Chud Attack
-Snot Bubble
-Death Roll
+
+Tail Whip - Basic physical attack where gator whips with his tail (range of damage, 10-35)
+Gator Bite - Basic physical attack where the gator chomps on the enemy (Range of damage, 10-25)
+Water Borrage- Upgraded version of water bubble, takes an extra turn to charge up but deals more damage
+Scratch - Basic physical attack where gator scratches the enemy (Range of damage, 10-20)
+Chud Attack - gator pulls out his laptop and builds a hackathon winning project, instakills enemy due to shock (Rare card)
+Snot Bubble - Gator spits a bubble of snot at the enemy (Range of damage, 10-20,chance of poison)
+Death Roll - Upgraded version of barrel roll, Gator rolls on the enemy dealing massive damage (Range of damage, 35-55)
+Barrel Roll - Gator rolls out of the way of the enemy attack (50% chance to dodge next attack)
+Water Bubble - Gator spits a bubble of water at the enemy (Range of damage, 10-25)
