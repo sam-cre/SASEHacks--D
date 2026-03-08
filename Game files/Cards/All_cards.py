@@ -40,7 +40,7 @@ COMMON_CARDS = [
          attack_type="physical", rarity="common"),
     Card("Gator Bite", 10, 25, "Gator chomps on the enemy",
          attack_type="physical", rarity="common"),
-    Card("Scratch", 10, 20, "Gator scratches the enemy",
+    Card("Scratch", 12, 20, "Gator scratches the enemy",
          attack_type="physical", rarity="common"),
     Card("Snot Bubble", 10, 20, "Gator spits a bubble of snot — chance of poison",
          attack_type="ranged", effect="poison", effect_chance=0.3, rarity="common"),

@@ -698,8 +698,11 @@ while running:
                 enemy_turn_pending = False
                 _do_enemy_turn()
             elif enemy and not enemy.is_alive():
-                game_state.advance_enemy()  # <--- Advance encounter logic here
-                stage_manager.transition_to(Stage.POST_BATTLE_WALK)
+                game_state.advance_enemy()
+                if game_state.all_enemies_defeated():
+                    stage_manager.transition_to(Stage.VICTORY)
+                else:
+                    stage_manager.transition_to(Stage.POST_BATTLE_WALK)
                 enemy = None
             elif player.hp <= 0:
                 # Check if revival is available

@@ -50,8 +50,8 @@ class QuestionScreen:
         """Called every frame — auto transitions after summary"""
         if self.show_summary and self.logic.result:
             tier = self.logic.get_performance_tier()
-            # For ok/poor tiers, skip the summary screen and go straight to reward
-            if tier in ("ok", "poor"):
+            # For poor tier only, skip the summary screen and go straight to reward
+            if tier == "poor":
                 self.stage_manager.transition_to(Stage.CARD_REWARD)
                 return
             if pygame.time.get_ticks() - self.summary_timer > self.summary_duration:
