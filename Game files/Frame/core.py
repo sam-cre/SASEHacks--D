@@ -16,6 +16,11 @@ class BattleLogic:
         self.last_enemy_damage = 0     # last damage enemy dealt — for renderer
         self.last_multiplier = 1       # tracks if penalty was active — for renderer
 
+        # ── Turn-based state ──
+        self.player_turn = True         # True = player's turn, False = enemy's turn
+        self.waiting_for_messages = False  # True = messages are playing, block input
+        self.turn_phase = "player"      # "player", "enemy", "done"
+
     # -------------------------
     # PLAYER ACTIONS
     # -------------------------
@@ -23,22 +28,36 @@ class BattleLogic:
     def player_attack(self, card):
         """
         Player plays a card.
-        Rolls damage from the card, applies it to the active enemy.
-        Returns the damage dealt.
+        Applies damage_modifier from debuffs.
+        Returns (damage_dealt, card_name).
         """
-        damage = card.roll_damage()
+        raw_damage = card.roll_damage()
+
+        # Apply player damage modifier (from enemy debuffs like Disgust, Rotate)
+        modifier = self.game_state.player_damage_modifier
+        damage = int(raw_damage * modifier)
+
         target = self.get_active_enemy()
 
         if target:
             target.take_damage(damage)
             self.last_player_damage = damage
-            self.battle_log.append(
-                f"You played {card.name} and dealt {damage} damage to {target.name}!"
-            )
+
+            if modifier < 1.0:
+                self.battle_log.append(
+                    f"You played {card.name} and dealt {damage} damage! (debuffed)"
+                )
+            else:
+                self.battle_log.append(
+                    f"You played {card.name} and dealt {damage} damage to {target.name}!"
+                )
 
             if not target.is_alive():
                 self.battle_log.append(f"{target.name} was defeated!")
                 self.game_state.monsters_defeated += 1
+
+        # Reset damage modifier after it's been used
+        self.game_state.player_damage_modifier = 1.0
 
         return damage
 
@@ -48,35 +67,80 @@ class BattleLogic:
 
     def enemy_attack(self):
         """
-        Active enemy attacks the player.
-        Applies game_state.damage_multiplier if player failed question wave.
-        Returns (final_damage, multiplier_used) tuple for renderer to display.
+        Active enemy picks and executes a random attack.
+        Returns (attack_dict, final_damage, missed, effect_applied).
         """
         enemy = self.get_active_enemy()
 
         if not enemy:
-            return 0, 1
+            return None, 0, False, None
 
-        raw_damage = enemy.roll_attack()
-        reduced_damage = max(0, raw_damage - self.player.defense)
+        attack, raw_damage, missed = enemy.execute_attack()
+
+        if missed:
+            self.battle_log.append(
+                f"{enemy.name} used {attack['name']}... but it missed!"
+            )
+            return attack, 0, True, None
+
+        # Apply game_state damage_multiplier (from failed question waves)
         multiplier = self.game_state.damage_multiplier
-        final_damage = reduced_damage * multiplier
+        final_damage = int(raw_damage * multiplier)
 
-        self.player.hp = max(0, self.player.hp - final_damage)
-        self.last_enemy_damage = final_damage
-        self.last_multiplier = multiplier
+        # Check dodge
+        if self.game_state.dodge_active:
+            if random.random() < 0.5:
+                self.battle_log.append(
+                    f"{enemy.name} used {attack['name']}, but you dodged!"
+                )
+                self.game_state.dodge_active = False
+                return attack, 0, True, None
+            else:
+                self.game_state.dodge_active = False
 
+        # Apply damage to player
+        if final_damage > 0:
+            self.player.hp = max(0, self.player.hp - final_damage)
+            self.last_enemy_damage = final_damage
+
+        # Log the attack
         if multiplier > 1:
             self.battle_log.append(
-                f"{enemy.name} attacks for {final_damage} damage! "
+                f"{enemy.name} used {attack['name']} for {final_damage} damage! "
                 f"(x{multiplier} penalty active)"
             )
-        else:
+        elif final_damage > 0:
             self.battle_log.append(
-                f"{enemy.name} attacks for {final_damage} damage!"
+                f"{enemy.name} used {attack['name']} for {final_damage} damage!"
             )
 
-        return final_damage, multiplier
+        # Apply status effects
+        effect_applied = None
+        effect = attack.get("effect")
+        effect_value = attack.get("effect_value")
+
+        if effect == "skip_turn" and effect_value:
+            self.game_state.player_skip_turns = effect_value
+            effect_applied = f"You are stunned for {effect_value} turn(s)!"
+            self.battle_log.append(effect_applied)
+
+        elif effect == "attack_debuff" and effect_value:
+            self.game_state.player_damage_modifier = effect_value
+            effect_applied = "Your attack power was reduced!"
+            self.battle_log.append(effect_applied)
+
+        elif effect == "half_damage" and effect_value:
+            self.game_state.player_damage_modifier = 0.5
+            effect_applied = "Your attacks will deal half damage next turn!"
+            self.battle_log.append(effect_applied)
+
+        elif effect == "drain" and effect_value:
+            heal_amount = effect_value
+            enemy.heal(heal_amount)
+            effect_applied = f"{enemy.name} drained {heal_amount} HP!"
+            self.battle_log.append(effect_applied)
+
+        return attack, final_damage, False, effect_applied
 
     # -------------------------
     # TURN RESOLUTION
@@ -100,7 +164,29 @@ class BattleLogic:
             "player_defeated": False,
             "battle_won": False,
             "battle_lost": False,
+            "enemy_attack": None,
+            "enemy_missed": False,
+            "effect_applied": None,
+            "player_skipped": False,
         }
+
+        # Check if player must skip
+        if self.game_state.player_skip_turns > 0:
+            self.game_state.player_skip_turns -= 1
+            self.battle_log.append("You can't move!")
+            results["player_skipped"] = True
+
+            # Enemy still attacks even when player skips
+            if self.get_active_enemy():
+                attack, dmg, missed, effect = self.enemy_attack()
+                results["enemy_attack"] = attack
+                results["enemy_damage"] = dmg
+                results["enemy_missed"] = missed
+                results["effect_applied"] = effect
+
+            results["battle_lost"] = self.check_loss()
+            results["player_defeated"] = self.check_loss()
+            return results
 
         # Player attacks
         results["player_damage"] = self.player_attack(card)
@@ -108,9 +194,12 @@ class BattleLogic:
 
         # Enemy only attacks back if still alive
         if self.get_active_enemy():
-            dmg, mult = self.enemy_attack()
+            attack, dmg, missed, effect = self.enemy_attack()
+            results["enemy_attack"] = attack
             results["enemy_damage"] = dmg
-            results["multiplier"] = mult
+            results["enemy_missed"] = missed
+            results["multiplier"] = self.game_state.damage_multiplier
+            results["effect_applied"] = effect
 
         # Check end conditions
         results["battle_won"] = self.check_win()

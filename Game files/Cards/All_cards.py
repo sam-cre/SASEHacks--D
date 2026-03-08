@@ -6,16 +6,14 @@ from Cards.Cards import Card
 # =============================================
 
 STARTER_PAIR_A = [
-    Card("Sand Throw", 15, 15, "Gator hurls sand at the enemy",
+    Card("Sand Throw", 6, 10, "Gator hurls sand at the enemy",
          attack_type="ranged", rarity="starter", permanent=True),
-    Card("Rock Throw", 15, 15, "Gator hurls a rock at the enemy",
+    Card("Rock Throw", 6, 10, "Gator hurls a rock at the enemy",
          attack_type="ranged", rarity="starter", permanent=True),
 ]
 
 STARTER_PAIR_B = [
-    Card("Stick Poke", 10, 10, "Gator pokes the enemy with a stick",
-         attack_type="physical", rarity="starter", permanent=True),
-    Card("Eye Poke", 10, 10, "Gator pokes the enemy in the eye",
+    Card("Stick Poke", 8, 12, "Gator pokes the enemy with a stick",
          attack_type="physical", rarity="starter", permanent=True),
 ]
 
@@ -42,7 +40,7 @@ COMMON_CARDS = [
          attack_type="physical", rarity="common"),
     Card("Gator Bite", 10, 25, "Gator chomps on the enemy",
          attack_type="physical", rarity="common"),
-    Card("Scratch", 10, 20, "Gator scratches the enemy",
+    Card("Scratch", 12, 20, "Gator scratches the enemy",
          attack_type="physical", rarity="common"),
     Card("Snot Bubble", 10, 20, "Gator spits a bubble of snot — chance of poison",
          attack_type="ranged", effect="poison", effect_chance=0.3, rarity="common"),
